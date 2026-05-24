@@ -184,6 +184,7 @@ ClientBin/
 *.pfx
 *.publishsettings
 node_modules/
+.codex-tools/
 _deps/
 _build/
 third_party/**/.git/
