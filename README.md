@@ -1,4 +1,4 @@
-# Equalizer APO 64-bit VST3 Fork
+# Equalizer APO 64 with VST3 support
 
 This repository is a restructured Windows fork based on [TheFireKahuna/equalizerAPO64](https://github.com/TheFireKahuna/equalizerAPO64), with the goal of keeping the familiar Equalizer APO workflow while adding
 native VST3 plug-in support.
