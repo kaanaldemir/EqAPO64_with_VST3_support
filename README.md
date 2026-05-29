@@ -1,5 +1,13 @@
 # Equalizer APO 64 with VST3 support
 
+> [!WARNING]
+>
+> I’m currently reviewing ways to improve the installer’s safety and recovery process, including the possibility of automatically creating a system restore point before installation. This comes after receiving a report from a user who experienced issues with their Windows installation and had to perform a system repair afterward.
+>
+> The installer was tested on **Windows 11 Version 24H2 (OS Build 26100.4652)** and worked correctly in my testing environment. I have not personally encountered any problems—otherwise I would not have shared the installer. However, Windows configurations, drivers, installed software, and custom system modifications can vary significantly, so compatibility cannot be guaranteed across all setups.
+>
+> Please proceed with caution. If possible, test the installer first in a virtual machine or on a non-critical system. I’ll also be adding the relevant warnings and recommendations here and on GitHub.
+
 This repository is a restructured Windows fork based on [TheFireKahuna/equalizerAPO64](https://github.com/TheFireKahuna/equalizerAPO64), with the goal of keeping the familiar Equalizer APO workflow while adding
 native VST3 plug-in support.
 
