@@ -42,12 +42,15 @@ SetCompressor /SOLID lzma
   !define MUI_ABORTWARNING
   !define MUI_COMPONENTSPAGE_NODESC
   !define MUI_WELCOMEPAGE_TITLE_3LINES
+  !define MUI_LANGDLL_REGISTRY_ROOT "HKLM"
+  !define MUI_LANGDLL_REGISTRY_KEY ${REGPATH}
+  !define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
 
 ;--------------------------------
 ;Pages
 
   !insertmacro MUI_PAGE_WELCOME
-  !insertmacro MUI_PAGE_LICENSE ..\License.txt
+  !insertmacro MUI_PAGE_LICENSE ..\LICENSE
   !insertmacro MUI_PAGE_DIRECTORY
   
 ;Start Menu Folder Page Configuration
@@ -70,6 +73,7 @@ SetCompressor /SOLID lzma
 ;Languages
 
   !insertmacro MUI_LANGUAGE "English"
+  !insertmacro MUI_LANGUAGE "Spanish"
   !insertmacro MUI_LANGUAGE "German"
 
 ;--------------------------------
@@ -89,12 +93,18 @@ Var renameIndex
 !macroend
     
 LangString VersionError ${LANG_ENGLISH} "This installer is only supposed to be run on {0} Windows. Please use the {1} installer."
+LangString VersionError ${LANG_SPANISH} "Este instalador solo debe ejecutarse en Windows {0}. Use el instalador {1}."
 LangString VersionError ${LANG_GERMAN} "Dieses Installationsprogramm kann nur auf einem {0}-Windows verwendet werden. Bitte nutzen Sie die {1}-Version."
 
 LangString UCRTError ${LANG_ENGLISH} "Your Windows installation is missing required updates to use this program. Please install remaining Windows updates or the Visual C++ Redistributable for Visual Studio 2015 - 2022.$\n$\nDo you want to download the Visual C++ Redistributable now?"
+LangString UCRTError ${LANG_SPANISH} "A su instalacion de Windows le faltan actualizaciones necesarias para usar este programa. Instale las actualizaciones pendientes de Windows o Visual C++ Redistributable para Visual Studio 2015 - 2022.$\n$\nDesea descargar Visual C++ Redistributable ahora?"
 LangString UCRTError ${LANG_GERMAN} "Ihrer Windows-Installation fehlen ben�tigte Updates, um dieses Programm zu verwenden. Bitte installieren Sie ausstehende Windows-Updates oder das Visual C++ Redistributable f�r Visual Studio 2015 - 2022.$\n$\nM�chten Sie jetzt das Visual C++ Redistributable herunterladen?"
 LangString CloseAppsPrompt ${LANG_ENGLISH} "Setup can close running Equalizer APO applications before installing. Unsaved configuration editor changes may be lost.$\n$\nDo you want setup to close them now?"
+LangString CloseAppsPrompt ${LANG_SPANISH} "El instalador puede cerrar aplicaciones de Equalizer APO antes de instalar. Los cambios no guardados del editor de configuracion pueden perderse.$\n$\nDesea que el instalador las cierre ahora?"
 LangString CloseAppsPrompt ${LANG_GERMAN} "Das Setup kann laufende Equalizer APO-Anwendungen vor der Installation schlie�en. Nicht gespeicherte �nderungen im Konfigurationseditor k�nnen verloren gehen.$\n$\nSollen sie jetzt geschlossen werden?"
+LangString RestorePointWarning ${LANG_ENGLISH} "Setup could not create a Windows restore point.$\n$\nThis can happen when System Protection is disabled, or when a restore point already exists from the last 24 hours. By default, Windows policy may block creating more than one restore point within the same 24-hour period.$\n$\nInstallation will continue."
+LangString RestorePointWarning ${LANG_SPANISH} "El instalador no pudo crear un punto de restauracion de Windows.$\n$\nEsto puede ocurrir si Proteccion del sistema esta desactivada, o si ya existe un punto de restauracion creado en las ultimas 24 horas. De forma predeterminada, las politicas de Windows pueden bloquear la creacion de mas de un punto de restauracion dentro del mismo periodo de 24 horas.$\n$\nLa instalacion continuara."
+LangString RestorePointWarning ${LANG_GERMAN} "Das Setup konnte keinen Windows-Wiederherstellungspunkt erstellen.$\n$\nDies kann passieren, wenn der Computerschutz deaktiviert ist oder wenn bereits ein Wiederherstellungspunkt aus den letzten 24 Stunden existiert. Standardm��ig kann Windows verhindern, dass innerhalb desselben 24-Stunden-Zeitraums mehr als ein Wiederherstellungspunkt erstellt wird.$\n$\nDie Installation wird fortgesetzt."
 
 ;--------------------------------
 ;Functions
@@ -102,6 +112,7 @@ Function .onInit
   !if ${LIBPATH} != "lib32"
     SetRegView 64
   !endif
+  !insertmacro MUI_LANGDLL_DISPLAY
   ;Get installation folder from registry if available
   ReadRegStr $INSTDIR HKLM ${REGPATH} "InstallPath"
 
@@ -147,9 +158,32 @@ Function CloseRunningApplications
   done:
 FunctionEnd
 
+Function CreateRestorePoint
+  DetailPrint "Creating Windows restore point..."
+  StrCpy $0 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+  ${IfNot} ${FileExists} "$0"
+    StrCpy $0 "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
+  ${EndIf}
+
+  ${If} ${FileExists} "$0"
+    nsExec::ExecToLog '"$0" -NoProfile -ExecutionPolicy Bypass -Command "try { Checkpoint-Computer -Description EqualizerAPO_${VERSION}_PreInstall -RestorePointType APPLICATION_INSTALL -ErrorAction Stop; exit 0 } catch { exit 1 }"'
+    Pop $1
+    ${If} $1 == 0
+      DetailPrint "Windows restore point created."
+    ${Else}
+      DetailPrint "Windows restore point was not created. PowerShell exit code: $1"
+      MessageBox MB_ICONEXCLAMATION|MB_OK $(RestorePointWarning)
+    ${EndIf}
+  ${Else}
+    DetailPrint "PowerShell was not found. Skipping restore point creation."
+    MessageBox MB_ICONEXCLAMATION|MB_OK $(RestorePointWarning)
+  ${EndIf}
+FunctionEnd
+
 ;--------------------------------
 ;Installer Sections
 LangString SecCheckForUpdates ${LANG_ENGLISH} "Check for updates automatically"
+LangString SecCheckForUpdates ${LANG_SPANISH} "Buscar actualizaciones automaticamente"
 LangString SecCheckForUpdates ${LANG_GERMAN} "Automatisch auf Updates pr�fen"
 
 Section $(SecCheckForUpdates) SecCheckForUpdates
@@ -157,6 +191,7 @@ SectionEnd
 
 Section "-Install"
   SetOutPath "$INSTDIR"
+  Call CreateRestorePoint
   Call CloseRunningApplications
 
   ;Possibly remove files from previous installation
@@ -227,6 +262,10 @@ Section "-Install"
   File "${LIBPATH}\vorbis.dll"
   File "${LIBPATH}\vorbisenc.dll"
   File "${LIBPATH}\vorbisfile.dll"
+  File "${LIBPATH}\msvcp140.dll"
+  File "${LIBPATH}\msvcp140_1.dll"
+  File "${LIBPATH}\vcruntime140.dll"
+  File "${LIBPATH}\vcruntime140_1.dll"
   File "${LIBPATH}\d3dcompiler_47.dll"
   File "${LIBPATH}\icuuc.dll"
   File "${LIBPATH}\Qt6Core.dll"
@@ -308,7 +347,12 @@ Section "-Install"
 
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Audio" "DisableProtectedAudioDG" 1
   ;RegDLL doesn't work for 64 bit dlls
-  ExecWait '"$SYSDIR\regsvr32.exe" /s "$INSTDIR\EqualizerAPO.dll"'
+  ExecWait '"$SYSDIR\regsvr32.exe" /s "$INSTDIR\EqualizerAPO.dll"' $1
+  ${If} $1 != 0
+    DeleteRegValue HKLM "Software\Microsoft\Windows\CurrentVersion\Audio" "DisableProtectedAudioDG"
+    MessageBox MB_ICONSTOP|MB_OK "Equalizer APO could not be registered. Installation will stop before modifying audio devices.$\r$\n$\r$\nThis usually means a required runtime DLL is missing or incompatible.$\r$\n$\r$\nregsvr32 exit code: $1"
+    Abort
+  ${EndIf}
 
   ExecWait '"$INSTDIR\DeviceSelector.exe" /i' $0
   
@@ -334,6 +378,7 @@ SectionEnd
 ;Uninstaller Sections
 
 LangString SecRemoveName ${LANG_ENGLISH} "Remove configurations and registry backups"
+LangString SecRemoveName ${LANG_SPANISH} "Eliminar configuraciones y copias de seguridad del registro"
 LangString SecRemoveName ${LANG_GERMAN} "Konfigurationen und Registrierungsbackups entfernen"
 
 Section /o un.$(SecRemoveName)
@@ -379,6 +424,10 @@ Section "-un.Uninstall"
   Delete "$INSTDIR\dxil.dll"
   Delete "$INSTDIR\dxcompiler.dll"
   Delete "$INSTDIR\d3dcompiler_47.dll"
+  Delete "$INSTDIR\vcruntime140_1.dll"
+  Delete "$INSTDIR\vcruntime140.dll"
+  Delete "$INSTDIR\msvcp140_1.dll"
+  Delete "$INSTDIR\msvcp140.dll"
   Delete /REBOOTOK "$INSTDIR\sndfile.dll"
   Delete /REBOOTOK "$INSTDIR\libfftw3.dll"
   Delete /REBOOTOK "$INSTDIR\fftw3.dll"

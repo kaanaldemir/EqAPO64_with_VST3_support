@@ -199,6 +199,7 @@ third_party/**/install/
 third_party/downloads/
 third_party/packages/
 Setup/*.exe
+!Setup/EqualizerAPO-x64-1.4.2.exe
 Setup/lib32/
 Setup/lib64/
 Setup/libARM64/

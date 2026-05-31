@@ -77,6 +77,43 @@ foreach ($dll in $runtimeDlls) {
 
 Copy-Item -LiteralPath (Join-Path $vcpkgBin "fftw3.dll") -Destination (Join-Path $libDir "libfftw3.dll") -Force
 
+$vcRuntimeDlls = @(
+	"msvcp140.dll",
+	"msvcp140_1.dll",
+	"vcruntime140.dll",
+	"vcruntime140_1.dll"
+)
+
+$vcRedistCandidates = Get-ChildItem -Path @(
+	(Join-Path ${env:ProgramFiles} "Microsoft Visual Studio\2022"),
+	(Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\2022")
+) -Recurse -Directory -ErrorAction SilentlyContinue |
+	Where-Object { $_.FullName -match "\\VC\\Redist\\MSVC\\[^\\]+\\x64\\Microsoft\.VC\d+\.CRT$" } |
+	Sort-Object FullName -Descending
+
+$vcRedistDir = $null
+foreach ($candidate in $vcRedistCandidates) {
+	$missing = $false
+	foreach ($dll in $vcRuntimeDlls) {
+		if (!(Test-Path -LiteralPath (Join-Path $candidate.FullName $dll))) {
+			$missing = $true
+			break
+		}
+	}
+	if (!$missing) {
+		$vcRedistDir = $candidate.FullName
+		break
+	}
+}
+
+if ($null -eq $vcRedistDir) {
+	throw "Visual C++ x64 runtime redistributable files were not found. Install Visual Studio 2022 C++ redistributables or build tools."
+}
+
+foreach ($dll in $vcRuntimeDlls) {
+	Copy-Item -LiteralPath (Join-Path $vcRedistDir $dll) -Destination (Join-Path $libDir $dll) -Force
+}
+
 $deployDir = Join-Path $root "_build\qt-deploy-x64"
 Remove-Item -LiteralPath $deployDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $deployDir | Out-Null

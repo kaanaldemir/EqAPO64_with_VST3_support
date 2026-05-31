@@ -1,13 +1,5 @@
 # Equalizer APO 64 with VST3 support
 
-> [!WARNING]
->
-> I’m currently reviewing ways to improve the installer’s safety and recovery process, including the possibility of automatically creating a system restore point before installation. This comes after receiving a report from a user who experienced issues with their Windows installation and had to perform a system repair afterward.
->
-> The installer was tested on **Windows 11 Version 24H2 (OS Build 26100.4652)** and worked correctly in my testing environment. I have not personally encountered any problems—otherwise I would not have shared the installer. However, Windows configurations, drivers, installed software, and custom system modifications can vary significantly, so compatibility cannot be guaranteed across all setups.
->
-> Please proceed with caution. If possible, test the installer first in a virtual machine or on a non-critical system. I’ll also be adding the relevant warnings and recommendations here and on GitHub.
-
 This repository is a restructured Windows fork based on [TheFireKahuna/equalizerAPO64](https://github.com/TheFireKahuna/equalizerAPO64), with the goal of keeping the familiar Equalizer APO workflow while adding
 native VST3 plug-in support.
 
@@ -42,6 +34,34 @@ PluginName.vst3/Contents/x86_64-win/PluginName.vst3
 ```
 
 If a plug-in does not show its editor, does not animate, process the audio with artifacts or crashes when opened or removed, test it first in a standard VST3 host or DAW. Some plug-ins require host features that Equalizer APO does not provide.
+
+## Installer Update - May 30, 2026
+
+The installer was updated with additional safety and deployment checks:
+
+- Attempts to create a Windows restore point before installation.
+- Bundles the required x64 Visual C++ runtime DLLs app-local.
+- Verifies that `EqualizerAPO.dll` can be registered before modifying audio devices.
+- Uses a multilingual NSIS installer with English, Spanish and German.
+
+## Safety And Recovery
+
+This installer registers an Audio Processing Object with selected Windows audio
+devices. If Windows reports missing runtime DLLs, or if the Windows Audio service
+becomes unstable after installation, remove Equalizer APO from the selected audio
+devices first:
+
+1. Open Equalizer APO Device Selector from the Start menu.
+2. Uncheck all selected playback and capture devices.
+3. Apply the change and reboot Windows if requested.
+4. Then uninstall Equalizer APO normally.
+
+Before installation, the installer also attempts to create a Windows restore
+point named `EqualizerAPO_<version>_PreInstall`. This is best-effort: Windows may
+reject it when System Protection is disabled or another restore point was
+recently created. The installer bundles the required x64 Visual C++ runtime DLLs
+app-local and stops before modifying audio devices if the APO cannot be
+registered.
 
 ## Installation
 
