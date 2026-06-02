@@ -3,9 +3,7 @@
 This repository is a restructured Windows fork based on [TheFireKahuna/equalizerAPO64](https://github.com/TheFireKahuna/equalizerAPO64), with the goal of keeping the familiar Equalizer APO workflow while adding
 native VST3 plug-in support.
 
-![VST3_loader_with_CalCurve_vst3](assets/vst3_loader.png)
-
-Featured VST3: [CalCurve by Mixomo](https://github.com/Mixomo/CalCurve) 
+![VST3_loader_with_CalCurve_vst3](assets/vst3_out_loader.png)
 
 NOTE: This build was compiled for Windows 10/11 64 bits with AVX2 support only (More compatible with all CPUs). If you need AVX512 support, you'll need a compatible CPU and will have to compile it yourself from this repository. 
 
