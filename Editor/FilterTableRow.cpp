@@ -21,10 +21,23 @@
 #include <QLineEdit>
 #include <QPainter>
 #include <QScrollBar>
+#include <QFile>
+#include <QDir>
+#include <QTextStream>
 
 #include "Editor/helpers/GUIHelper.h"
 #include "FilterTableRow.h"
 #include "ui_FilterTableRow.h"
+
+static void appendFilterRowDebugLog(const QString& message)
+{
+	QFile file(QDir::temp().absoluteFilePath("EqApoOutProcHost-debug.log"));
+	if (file.open(QIODevice::Append | QIODevice::Text))
+	{
+		QTextStream stream(&file);
+		stream << "[row] " << message << "\n";
+	}
+}
 
 FilterTableRow::FilterTableRow(FilterTable* table, int number, FilterTable::Item* item, IFilterGUI* gui)
 	: QWidget(table),
@@ -164,6 +177,9 @@ void FilterTableRow::on_actionAdd_triggered()
 
 void FilterTableRow::on_actionRemove_triggered()
 {
+	appendFilterRowDebugLog("remove clicked itemText=" + item->text + " gui=" + QString(gui != NULL ? "true" : "false"));
+	if (gui != NULL)
+		gui->prepareDelete();
 	table->removeItem(item);
 	table->updateGuis();
 }

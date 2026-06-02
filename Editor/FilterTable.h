@@ -118,6 +118,7 @@ protected:
 	void showEvent(QShowEvent*) override;
 
 private:
+	void prepareDeleteItem(Item* item);
 	void ensureRowVisible(int row);
 	int rowForPos(QPoint pos, bool insert);
 	QRectF rowRect(int row);

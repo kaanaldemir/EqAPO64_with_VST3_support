@@ -89,6 +89,8 @@ FilterTable::FilterTable(MainWindow* mainWindow, QWidget* parent)
 
 FilterTable::~FilterTable()
 {
+	for (Item* item : items)
+		prepareDeleteItem(item);
 	for (IFilterGUIFactory* factory : factories)
 		delete factory;
 	factories.clear();
@@ -257,6 +259,8 @@ void FilterTable::setLines(const QString& configPath, const QList<QString>& line
 {
 	this->configPath = configPath;
 
+	for (Item* item : items)
+		prepareDeleteItem(item);
 	qDeleteAll(items);
 	items.clear();
 
@@ -342,7 +346,15 @@ FilterTable::Item* FilterTable::addLine(const QString& line, FilterTable::Item* 
 void FilterTable::removeItem(FilterTable::Item* item)
 {
 	items.removeOne(item);
+	prepareDeleteItem(item);
+	delete item;
 	emit linesChanged();
+}
+
+void FilterTable::prepareDeleteItem(FilterTable::Item* item)
+{
+	if (item != NULL && item->gui != NULL)
+		item->gui->prepareDelete();
 }
 
 QMenu* FilterTable::createAddPopupMenu()
@@ -474,6 +486,7 @@ void FilterTable::deleteSelectedLines()
 				focused = NULL;
 			if (item == selectionStart)
 				selectionStart = NULL;
+			prepareDeleteItem(item);
 			delete item;
 		}
 		else
@@ -740,6 +753,7 @@ void FilterTable::mouseMoveEvent(QMouseEvent* event)
 						if (selectionStart == item)
 							selectionStart = NULL;
 						selected.remove(item);
+						prepareDeleteItem(item);
 						delete item;
 					}
 				}

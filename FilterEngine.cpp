@@ -50,6 +50,10 @@
 #include "filters/BiQuadFilterFactory.h"
 #include "filters/IIRFilterFactory.h"
 #include "filters/PreampFilterFactory.h"
+#include "filters/OutputGuardFilterFactory.h"
+#include "filters/OutProcGainFilterFactory.h"
+#include "filters/OutProcBiquadFilterFactory.h"
+#include "filters/OutProcVSTPluginFilterFactory.h"
 #include "filters/DelayFilterFactory.h"
 #include "filters/CopyFilterFactory.h"
 #include "filters/IncludeFilterFactory.h"
@@ -63,8 +67,9 @@ using namespace mup;
 
 FilterEngine::FilterEngine()
 	: parser(nullptr),
-      allocatedFrameCount(0),
+	  allocatedFrameCount(0),
 	  preMix(false),
+	  analysisMode(false),
 	  capture(false),
 	  postMixInstalled(true),
 	  inputChannelCount(0),
@@ -91,6 +96,10 @@ FilterEngine::FilterEngine()
 	factories.push_back(new IIRFilterFactory());
 	factories.push_back(new BiQuadFilterFactory());
 	factories.push_back(new PreampFilterFactory());
+	factories.push_back(new OutputGuardFilterFactory());
+	factories.push_back(new OutProcGainFilterFactory());
+	factories.push_back(new OutProcBiquadFilterFactory());
+	factories.push_back(new OutProcVSTPluginFilterFactory());
 	factories.push_back(new DelayFilterFactory());
 	factories.push_back(new CopyFilterFactory());
 	factories.push_back(new ConvolutionFilterFactory());
@@ -178,6 +187,7 @@ void FilterEngine::initialize(float sampleRate, unsigned inputChannelCount, unsi
 	this->realChannelCount = realChannelCount;
 	this->outputChannelCount = outputChannelCount;
 	this->maxFrameCount = maxFrameCount;
+	this->analysisMode = !customPath.empty();
 	this->transitionCounter = 0;
 	this->transitionLength = (unsigned)(sampleRate / 100);
 	resizeBuffers(maxFrameCount);

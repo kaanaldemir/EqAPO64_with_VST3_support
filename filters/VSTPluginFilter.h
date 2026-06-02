@@ -67,5 +67,7 @@ private:
 
 	bool skipProcessing = false;
 	bool reportCrash = true;
+	bool reportSlowProcessing = true;
+	double slowProcessingLimitSeconds = 0.25;
 };
 #pragma AVRT_VTABLES_END

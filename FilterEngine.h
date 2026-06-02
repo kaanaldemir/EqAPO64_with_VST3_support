@@ -55,6 +55,7 @@ public:
 	bool isPreMix() const {return preMix;}
 	bool isCapture() const {return capture;}
 	bool isPostMixInstalled() const {return postMixInstalled;}
+	bool isAnalysisMode() const {return analysisMode;}
 	std::wstring getDeviceName() const {return deviceName;}
 	std::wstring getConnectionName() const {return connectionName;}
 	std::wstring getDeviceGuid() const {return deviceGuid;}
@@ -80,6 +81,7 @@ private:
 	unsigned allocatedFrameCount;
 
 	bool preMix;
+	bool analysisMode;
 	bool capture;
 	bool postMixInstalled;
 	std::wstring deviceName;

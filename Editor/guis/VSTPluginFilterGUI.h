@@ -21,9 +21,12 @@
 
 #include <memory>
 #include <QElapsedTimer>
+#include <QString>
 #include <QTimer>
 #include "Editor/IFilterGUI.h"
 #include "helpers/VSTPluginLibrary.h"
+
+class QProcess;
 
 namespace Ui {
 class VSTPluginFilterGUI;
@@ -34,12 +37,13 @@ class VSTPluginFilterGUI : public IFilterGUI
 	Q_OBJECT
 
 public:
-	explicit VSTPluginFilterGUI(std::shared_ptr<VSTPluginLibrary> library, const std::wstring& chunkData, const std::unordered_map<std::wstring, float>& paramMap);
+	explicit VSTPluginFilterGUI(std::shared_ptr<VSTPluginLibrary> library, const std::wstring& chunkData, const std::unordered_map<std::wstring, float>& paramMap, bool outProcMode = false, const QString& hostId = QString());
 	~VSTPluginFilterGUI();
 
 	void store(QString& command, QString& parameters) override;
 	void loadPreferences(const QVariantMap& prefs) override;
 	void storePreferences(QVariantMap& prefs) override;
+	void prepareDelete() override;
 	void onAutomate();
 	void onSizeWindow(int w, int h);
 
@@ -53,6 +57,12 @@ private slots:
 
 private:
 	void initPlugin();
+	void openOutProcPanel();
+	void finishOutProcPanel(int exitCode);
+	bool signalOutProcPanel(const wchar_t* suffix);
+	bool consumeOutProcPanelSignal(const wchar_t* suffix);
+	void closeOutProcPanel();
+	void terminateOutProcPanel();
 	void releasePluginInstance();
 	void updatePermissionWarning();
 
@@ -62,6 +72,11 @@ private:
 	QTimer idleTimer;
 	std::wstring chunkData;
 	std::unordered_map<std::wstring, float> paramMap;
+	bool outProcMode = false;
+	QString hostId;
+	QProcess* outProcGuiProcess = nullptr;
+	QString outProcGuiConfigPath;
+	bool outProcGuiHidden = false;
 	bool autoApplyDialog = false;
 	QElapsedTimer lastReadTimer;
 };

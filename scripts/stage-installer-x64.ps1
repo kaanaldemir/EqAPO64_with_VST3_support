@@ -31,6 +31,7 @@ if (!(Test-Path -LiteralPath $windeployqt)) {
 
 $requiredBinaries = @{
 	(Join-Path $root "EqualizerAPO\x64\$Configuration\EqualizerAPO.dll") = "EqualizerAPO.dll"
+	(Join-Path $root "EqApoOutProcHost\x64\$Configuration\EqApoOutProcHost.exe") = "EqApoOutProcHost.exe"
 	(Join-Path $root "Benchmark\x64\$Configuration\Benchmark.exe") = "Benchmark.exe"
 	(Join-Path $root "VoicemeeterClient\x64\$Configuration\VoicemeeterClient.exe") = "VoicemeeterClient.exe"
 }

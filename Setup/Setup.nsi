@@ -154,6 +154,7 @@ Function CloseRunningApplications
     nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM UpdateChecker.exe /T /F'
     nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM Benchmark.exe /T /F'
     nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM VoicemeeterClient.exe /T /F'
+    nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM EqApoOutProcHost.exe /T /F'
   ${EndIf}
   done:
 FunctionEnd
@@ -208,6 +209,7 @@ Section "-Install"
   
   ;Rename before delete as these files may be in use
   !insertmacro RenameAndDelete "$INSTDIR\EqualizerAPO.dll"
+  !insertmacro RenameAndDelete "$INSTDIR\EqApoOutProcHost.exe"
   !insertmacro RenameAndDelete "$INSTDIR\libfftw3-3.dll"
   !insertmacro RenameAndDelete "$INSTDIR\libfftw3.dll"
   !insertmacro RenameAndDelete "$INSTDIR\fftw3.dll"
@@ -245,6 +247,7 @@ Section "-Install"
   !insertmacro RenameAndDelete "$INSTDIR\Qt6Widgets.dll"
   
   File "${BINPATH}\EqualizerAPO.dll"
+  File "${BINPATH}\EqApoOutProcHost.exe"
   File "${BINPATH}\DeviceSelector.exe"
   File "${BINPATH}\Benchmark.exe"
   File "${BINPATH}\VoicemeeterClient.exe"
@@ -399,6 +402,7 @@ Section "-un.Uninstall"
   SetOutPath $INSTDIR
   ExecWait '"$INSTDIR\UpdateChecker.exe" -u'
   ExecWait '"$INSTDIR\DeviceSelector.exe" /u'
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM EqApoOutProcHost.exe /T /F'
   Pop $OUTDIR
   SetOutPath $OUTDIR
   
@@ -436,6 +440,7 @@ Section "-un.Uninstall"
   Delete "$INSTDIR\UpdateChecker.exe"
   Delete "$INSTDIR\VoicemeeterClient.exe"
   Delete "$INSTDIR\Benchmark.exe"
+  Delete /REBOOTOK "$INSTDIR\EqApoOutProcHost.exe"
   Delete "$INSTDIR\DeviceSelector.exe"
   Delete /REBOOTOK "$INSTDIR\EqualizerAPO.dll"
 

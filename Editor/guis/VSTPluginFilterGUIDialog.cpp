@@ -51,6 +51,7 @@ VSTPluginFilterGUIDialog::VSTPluginFilterGUIDialog(QWidget* parent, VSTPluginIns
 				this->ui->frame->setFixedSize(width, height);
 		}
 	});
+	idleTimer.setTimerType(Qt::PreciseTimer);
 	idleTimer.setInterval(16);
 }
 

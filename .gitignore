@@ -187,12 +187,14 @@ node_modules/
 .codex-tools/
 _deps/
 _build/
+complementary context/
 third_party/**/.git/
 third_party/vcpkg/
 third_party/vcpkg_installed/
 third_party/Qt/
 third_party/nsis-*/
 third_party/python/
+third_party/build/
 third_party/**/build/
 third_party/**/cmake-build*/
 third_party/**/install/

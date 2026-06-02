@@ -20,6 +20,7 @@
 #include "stdafx.h"
 #include "helpers/StringHelper.h"
 #include "helpers/LogHelper.h"
+#include "helpers/PrecisionTimer.h"
 #include "VSTPluginFilter.h"
 
 using namespace std;
@@ -40,6 +41,7 @@ std::vector<std::wstring> VSTPluginFilter::initialize(float sampleRate, unsigned
 	cleanup();
 
 	channelCount = channelNames.size();
+	slowProcessingLimitSeconds = max(0.25, (static_cast<double>(maxFrameCount) / max(1.0f, sampleRate)) * 8.0);
 	if (channelCount == 0)
 		return channelNames;
 
@@ -58,7 +60,7 @@ std::vector<std::wstring> VSTPluginFilter::initialize(float sampleRate, unsigned
 	{
 		LogF(L"The VST plugin %s does not expose audio inputs or outputs.", libPath.c_str());
 		skipProcessing = true;
-		effectChannelCount = channelCount;
+		effectChannelCount = static_cast<unsigned>(channelCount);
 	}
 	// round up
 	effectCount = (channelCount + (effectChannelCount - 1)) / effectChannelCount;
@@ -134,8 +136,8 @@ void VSTPluginFilter::prepareForProcessing(float sampleRate, unsigned maxFrameCo
 				effect->setUsedChannelCount(channelCount % effectChannelCount);
 			else
 				effect->setUsedChannelCount(effectChannelCount);
-			effect->prepareForProcessing(sampleRate, maxFrameCount);
 			effect->writeToEffect(chunkData, paramMap);
+			effect->prepareForProcessing(sampleRate, maxFrameCount);
 			effect->startProcessing();
 		}
 	}
@@ -160,6 +162,9 @@ void VSTPluginFilter::process(double** output, double** input, unsigned frameCou
 			memcpy(output[i], input[i], frameCount * sizeof(double));
 		return;
 	}
+
+	PrecisionTimer processingTimer;
+	processingTimer.start();
 
 	__try
 	{
@@ -285,6 +290,17 @@ void VSTPluginFilter::process(double** output, double** input, unsigned frameCou
 		for (unsigned i = 0; i < channelCount; i++)
 			memcpy(output[i], input[i], frameCount * sizeof(double));
 	}
+
+	const double elapsedSeconds = processingTimer.stop();
+	if (elapsedSeconds > slowProcessingLimitSeconds)
+	{
+		if (reportSlowProcessing)
+		{
+			LogF(L"The VST plugin %s blocked audio processing for %.3f seconds. Disabling this in-process plugin until the configuration is reloaded.", libPath.c_str(), elapsedSeconds);
+			reportSlowProcessing = false;
+		}
+		skipProcessing = true;
+	}
 }
 #pragma AVRT_CODE_END
 
@@ -310,8 +326,15 @@ void VSTPluginFilter::cleanup()
 		for (unsigned i = 0; i < effectCount; i++)
 		{
 			VSTPluginInstance* effect = effects[i];
-			effect->stopProcessing();
-			effect->~VSTPluginInstance();
+			__try
+			{
+				effect->stopProcessing();
+				effect->~VSTPluginInstance();
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				LogF(L"The VST plugin %s crashed while being unloaded.", libPath.c_str());
+			}
 			MemoryHelper::free(effect);
 		}
 		MemoryHelper::free(effects);

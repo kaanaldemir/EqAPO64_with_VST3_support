@@ -106,32 +106,32 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LIBSNDFILE_LIB Condition="'$(LIBSNDFILE_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\debug\lib</LIBSNDFILE_LIB>
     <FFTW_LIB Condition="'$(FFTW_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\debug\lib</FFTW_LIB>
-    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\muparserx\build\$(Platform)\Debug</MUPARSERX_LIB>
+    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\build\muparserx-$(Platform)-windows\Debug</MUPARSERX_LIB>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LIBSNDFILE_LIB Condition="'$(LIBSNDFILE_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\debug\lib</LIBSNDFILE_LIB>
     <FFTW_LIB Condition="'$(FFTW_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\debug\lib</FFTW_LIB>
-    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\muparserx\build\$(Platform)\Debug</MUPARSERX_LIB>
+    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\build\muparserx-$(Platform)-windows\Debug</MUPARSERX_LIB>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <LIBSNDFILE_LIB Condition="'$(LIBSNDFILE_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\debug\lib</LIBSNDFILE_LIB>
     <FFTW_LIB Condition="'$(FFTW_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\debug\lib</FFTW_LIB>
-    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\muparserx\build\$(Platform)\Debug</MUPARSERX_LIB>
+    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\build\muparserx-$(Platform)-windows\Debug</MUPARSERX_LIB>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LIBSNDFILE_LIB Condition="'$(LIBSNDFILE_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\lib</LIBSNDFILE_LIB>
     <FFTW_LIB Condition="'$(FFTW_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\lib</FFTW_LIB>
-    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\muparserx\build\$(Platform)\Release</MUPARSERX_LIB>
+    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\build\muparserx-$(Platform)-windows\Release</MUPARSERX_LIB>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LIBSNDFILE_LIB Condition="'$(LIBSNDFILE_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\lib</LIBSNDFILE_LIB>
     <FFTW_LIB Condition="'$(FFTW_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\lib</FFTW_LIB>
-    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\muparserx\build\$(Platform)\Release</MUPARSERX_LIB>
+    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\build\muparserx-$(Platform)-windows\Release</MUPARSERX_LIB>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <LIBSNDFILE_LIB Condition="'$(LIBSNDFILE_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\lib</LIBSNDFILE_LIB>
     <FFTW_LIB Condition="'$(FFTW_LIB)'==''">$(SolutionDir)third_party\vcpkg_installed\$(Platform)-windows\lib</FFTW_LIB>
-    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\muparserx\build\$(Platform)\Release</MUPARSERX_LIB>
+    <MUPARSERX_LIB Condition="'$(MUPARSERX_LIB)'==''">$(SolutionDir)third_party\build\muparserx-$(Platform)-windows\Release</MUPARSERX_LIB>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <IncludePath>$(SolutionDir);$(SolutionDir)third_party\vst3sdk;$(IncludePath);$(LIBSNDFILE_INCLUDE);$(MUPARSERX_INCLUDE);$(FFTW_INCLUDE)</IncludePath>
@@ -331,6 +331,14 @@
     <ClInclude Include="filters\loudnessCorrection\LoudnessCorrectionFilter.h" />
     <ClInclude Include="filters\loudnessCorrection\ParameterArchive.h" />
     <ClInclude Include="filters\loudnessCorrection\VolumeController.h" />
+    <ClInclude Include="filters\OutProcBiquadFilter.h" />
+    <ClInclude Include="filters\OutProcBiquadFilterFactory.h" />
+    <ClInclude Include="filters\OutProcGainFilter.h" />
+    <ClInclude Include="filters\OutProcGainFilterFactory.h" />
+    <ClInclude Include="filters\OutProcVSTPluginFilter.h" />
+    <ClInclude Include="filters\OutProcVSTPluginFilterFactory.h" />
+    <ClInclude Include="filters\OutputGuardFilter.h" />
+    <ClInclude Include="filters\OutputGuardFilterFactory.h" />
     <ClInclude Include="filters\PreampFilter.h" />
     <ClInclude Include="filters\PreampFilterFactory.h" />
     <ClInclude Include="filters\StageFilterFactory.h" />
@@ -351,6 +359,8 @@
     <ClInclude Include="IFilter.h" />
     <ClInclude Include="IFilterFactory.h" />
     <ClInclude Include="libHybridConv-0.1.1\libHybridConv_eapo.h" />
+    <ClInclude Include="outproc\OutProcAudioProtocol.h" />
+    <ClInclude Include="outproc\OutProcVSTConfig.h" />
     <ClInclude Include="parser\LogicalOperators.h" />
     <ClInclude Include="parser\RegexFunctions.h" />
     <ClInclude Include="parser\RegistryFunctions.h" />
@@ -385,6 +395,14 @@
     <ClCompile Include="filters\loudnessCorrection\LoudnessCorrectionFilterFactory.cpp" />
     <ClCompile Include="filters\loudnessCorrection\LoudnessCorrectionFilter.cpp" />
     <ClCompile Include="filters\loudnessCorrection\VolumeController.cpp" />
+    <ClCompile Include="filters\OutProcBiquadFilter.cpp" />
+    <ClCompile Include="filters\OutProcBiquadFilterFactory.cpp" />
+    <ClCompile Include="filters\OutProcGainFilter.cpp" />
+    <ClCompile Include="filters\OutProcGainFilterFactory.cpp" />
+    <ClCompile Include="filters\OutProcVSTPluginFilter.cpp" />
+    <ClCompile Include="filters\OutProcVSTPluginFilterFactory.cpp" />
+    <ClCompile Include="filters\OutputGuardFilter.cpp" />
+    <ClCompile Include="filters\OutputGuardFilterFactory.cpp" />
     <ClCompile Include="filters\PreampFilter.cpp" />
     <ClCompile Include="filters\PreampFilterFactory.cpp" />
     <ClCompile Include="filters\StageFilterFactory.cpp" />

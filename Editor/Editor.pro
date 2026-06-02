@@ -312,7 +312,7 @@ isEmpty(MUPARSERX_INCLUDE) {
 
 MUPARSERX_LIB = $$(MUPARSERX_LIB)
 isEmpty(MUPARSERX_LIB) {
-	MUPARSERX_LIB = "$$PWD/../third_party/muparserx/build/x64/Release"
+	MUPARSERX_LIB = "$$PWD/../third_party/build/muparserx-x64-windows/Release"
 }
 
 INCLUDEPATH += $$PWD/.. $$PWD/../third_party/vst3sdk $$LIBSNDFILE_INCLUDE $$FFTW_INCLUDE $$MUPARSERX_INCLUDE

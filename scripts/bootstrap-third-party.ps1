@@ -49,7 +49,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "vcpkg install failed with exit code $LASTEXITCODE"
 }
 
-$muparserBuild = Join-Path $thirdParty "muparserx\build\x64"
+$muparserBuild = Join-Path $thirdParty "build\muparserx-$Triplet"
 $muparserSource = Join-Path $thirdParty "muparserx"
 cmake -S $muparserSource -B $muparserBuild -A x64 -DUSE_WIDE_STRING=ON -DCMAKE_BUILD_TYPE=$Configuration
 if ($LASTEXITCODE -ne 0) {

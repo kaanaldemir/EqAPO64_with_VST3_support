@@ -14,6 +14,8 @@ NOTE: This build was compiled for Windows 10/11 64 bits with AVX2 support only (
 - Double procession processing (64 bit internal pipeline) for precision and quality when applying multiple overlapping effects. Examples include convolution, complex parametric EQ setups or GraphicEQ's. 
 - Native VST3 hosting through the Steinberg VST3 SDK.
 - Existing VST2 support retained for older plug-ins.
+- Experimental out-of-process VST hosting for isolating plug-ins from the
+  Configuration Editor and the APO audio engine.
 - Configuration Editor workflow preserved.
 - Reproducible installer build using local dependencies under `third_party/`.
 - NSIS-based installer packaging for end users.
@@ -22,6 +24,16 @@ NOTE: This build was compiled for Windows 10/11 64 bits with AVX2 support only (
 
 Like VST2, VST3 support is not universal, and there is no guarantee that it will work with all VST3 effects plugins on the market.
 It is best to use it with simple, lightweight plugins, as some more complex ones may expose or require parameters that the APO pipeline does not expose or support. 
+
+The Configuration Editor offers two VST-related paths:
+
+- `VSTPlugin:` uses the original in-process loader.
+- `OutProcVSTPlugin:` uses the experimental isolated host while keeping the
+  original Equalizer APO VST loading code.
+
+The analyzer state sync is intentionally conservative. VST2/VST3 plug-in state
+is synchronized in roughly 500 ms intervals so analysis-only plug-ins do not
+cause constant host refreshes.
 
 ## About VST3 Plug-ins
 
@@ -35,14 +47,25 @@ PluginName.vst3/Contents/x86_64-win/PluginName.vst3
 
 If a plug-in does not show its editor, does not animate, process the audio with artifacts or crashes when opened or removed, test it first in a standard VST3 host or DAW. Some plug-ins require host features that Equalizer APO does not provide.
 
-## Installer Update - May 30, 2026
+## Installer Update - June 1, 2026 (Exp Branch)
 
-The installer was updated with additional safety and deployment checks:
+The June 1, 2026 experimental branch update is a full x64 installer refresh for
+the VST3-capable fork:
 
-- Attempts to create a Windows restore point before installation.
-- Bundles the required x64 Visual C++ runtime DLLs app-local.
-- Verifies that `EqualizerAPO.dll` can be registered before modifying audio devices.
-- Uses a multilingual NSIS installer with English, Spanish and German.
+- Adds the experimental `OutProcVSTPlugin:` path, which runs plug-ins in
+  `EqApoOutProcHost.exe` so many plug-in crashes can be isolated from the
+  Configuration Editor and the APO audio engine.
+- Shows out-of-process VST editor windows with live GUI animation support for
+  plug-ins that render animated meters, curves or visual feedback.
+- Improves out-of-process panel lifecycle handling: show/hide does not unload
+  the plug-in, removing the row shuts down the matching host process, and stale
+  host sessions are cleaned up more reliably.
+- Synchronizes VST state between the editor, audio engine and analyzer at a
+  conservative interval so analyzer-only plug-ins do not continuously recreate
+  host instances.
+- Stores richer VST state for both VST2 and VST3 while remaining compatible
+  with older `ChunkData` entries.
+- Installs `EqApoOutProcHost.exe` next to the main Equalizer APO binaries.
 
 ## Safety And Recovery
 

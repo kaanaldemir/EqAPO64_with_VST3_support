@@ -15,7 +15,7 @@ $paths = @{
 	FFTW_INCLUDE = Join-Path $thirdParty "vcpkg_installed\$triplet\include"
 	FFTW_LIB = Join-Path $thirdParty "vcpkg_installed\$triplet\lib"
 	MUPARSERX_INCLUDE = Join-Path $thirdParty "muparserx\parser"
-	MUPARSERX_LIB = Join-Path $thirdParty "muparserx\build\x64\$Configuration"
+	MUPARSERX_LIB = Join-Path $thirdParty "build\muparserx-$triplet\$Configuration"
 	TCLAP_ROOT = Join-Path $thirdParty "tclap"
 }
 
@@ -52,6 +52,7 @@ $props = @(
 $commands = @(
 	"msbuild Common.vcxproj $($props -join ' ')",
 	"msbuild EqualizerAPO\EqualizerAPO.vcxproj $($props -join ' ')",
+	"msbuild EqApoOutProcHost\EqApoOutProcHost.vcxproj $($props -join ' ')",
 	"msbuild Benchmark\Benchmark.vcxproj $($props -join ' ')",
 	"msbuild VoicemeeterClient\VoicemeeterClient.vcxproj $($props -join ' ')"
 )

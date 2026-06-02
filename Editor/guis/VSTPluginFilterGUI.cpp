@@ -19,11 +19,20 @@
 
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QMessageBox>
+#include <QProcess>
 #include <QSettings>
 #include <QStringList>
+#include <QTextStream>
+#include <QUuid>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "outproc/OutProcAudioProtocol.h"
+#include "outproc/OutProcVSTConfig.h"
 #include "helpers/aeffectx.h"
 #include "helpers/StringHelper.h"
 #include "Editor/helpers/GUIHelper.h"
@@ -35,10 +44,34 @@
 using namespace std;
 using namespace std::placeholders;
 
-VSTPluginFilterGUI::VSTPluginFilterGUI(std::shared_ptr<VSTPluginLibrary> library, const std::wstring& chunkData, const std::unordered_map<std::wstring, float>& paramMap)
-	: ui(new Ui::VSTPluginFilterGUI), library(library), chunkData(chunkData), paramMap(paramMap)
+static QString makeOutProcObjectName(const QString& hostId, const wchar_t* suffix)
+{
+	QString safeId = hostId;
+	for (QChar& ch : safeId)
+	{
+		const bool ok = ch.isLetterOrNumber() || ch == '-' || ch == '_';
+		if (!ok)
+			ch = '_';
+	}
+	return "Global\\EqApoOutProcVST_" + safeId + "_" + QString::fromWCharArray(suffix);
+}
+
+static void appendOutProcDebugLog(const QString& message)
+{
+	QFile file(QDir::temp().absoluteFilePath("EqApoOutProcHost-debug.log"));
+	if (file.open(QIODevice::Append | QIODevice::Text))
+	{
+		QTextStream stream(&file);
+		stream << "[editor pid=" << GetCurrentProcessId() << "] " << message << "\n";
+	}
+}
+
+VSTPluginFilterGUI::VSTPluginFilterGUI(std::shared_ptr<VSTPluginLibrary> library, const std::wstring& chunkData, const std::unordered_map<std::wstring, float>& paramMap, bool outProcMode, const QString& hostId)
+	: ui(new Ui::VSTPluginFilterGUI), library(library), chunkData(chunkData), paramMap(paramMap), outProcMode(outProcMode), hostId(hostId)
 {
 	ui->setupUi(this);
+	if (outProcMode && this->hostId.isEmpty())
+		this->hostId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 	ui->frame->setVisible(false);
 	updatePermissionWarning();
 
@@ -50,11 +83,13 @@ VSTPluginFilterGUI::VSTPluginFilterGUI(std::shared_ptr<VSTPluginLibrary> library
 	ui->pathLineEdit->setText(relativePath);
 
 	connect(&idleTimer, &QTimer::timeout, this, &VSTPluginFilterGUI::on_idle);
+	idleTimer.setTimerType(Qt::PreciseTimer);
 	idleTimer.setInterval(16);
 }
 
 VSTPluginFilterGUI::~VSTPluginFilterGUI()
 {
+	closeOutProcPanel();
 	releasePluginInstance();
 
 	delete ui;
@@ -62,7 +97,7 @@ VSTPluginFilterGUI::~VSTPluginFilterGUI()
 
 void VSTPluginFilterGUI::store(QString& command, QString& parameters)
 {
-	command = "VSTPlugin";
+	command = outProcMode ? "OutProcVSTPlugin" : "VSTPlugin";
 
 	QString absolutePath = QString::fromStdWString(library->getLibPath());
 	QDir pluginsDir(QString::fromStdWString(VSTPluginLibrary::getDefaultPluginPath()));
@@ -73,6 +108,8 @@ void VSTPluginFilterGUI::store(QString& command, QString& parameters)
 	if (relativePath.contains(" "))
 		relativePath = "\"" + relativePath + "\"";
 	parameters = "Library " + relativePath;
+	if (outProcMode)
+		parameters += " HostId " + hostId;
 
 	if (chunkData != L"")
 	{
@@ -93,7 +130,16 @@ void VSTPluginFilterGUI::store(QString& command, QString& parameters)
 void VSTPluginFilterGUI::loadPreferences(const QVariantMap& prefs)
 {
 	autoApplyDialog = prefs.value("autoApplyDialog").toBool();
-	initPlugin();
+	if (outProcMode)
+	{
+		QPalette palette = ui->statusLabel->palette();
+		palette.setColor(QPalette::Active, QPalette::WindowText, Qt::black);
+		palette.setColor(QPalette::Inactive, QPalette::WindowText, Qt::black);
+		ui->statusLabel->setPalette(palette);
+		ui->statusLabel->setText(tr("Out-of-process VST host"));
+	}
+	else
+		initPlugin();
 }
 
 void VSTPluginFilterGUI::storePreferences(QVariantMap& prefs)
@@ -101,8 +147,21 @@ void VSTPluginFilterGUI::storePreferences(QVariantMap& prefs)
 	prefs.insert("autoApplyDialog", autoApplyDialog);
 }
 
+void VSTPluginFilterGUI::prepareDelete()
+{
+	appendOutProcDebugLog("prepareDelete outProc=" + QString(outProcMode ? "true" : "false") + " hostId=" + hostId);
+	if (outProcMode)
+		terminateOutProcPanel();
+}
+
 void VSTPluginFilterGUI::on_openPanelButton_clicked()
 {
+	if (outProcMode)
+	{
+		openOutProcPanel();
+		return;
+	}
+
 	initPlugin();
 
 	if (effect != NULL)
@@ -123,6 +182,271 @@ void VSTPluginFilterGUI::on_openPanelButton_clicked()
 		}
 		idleTimer.stop();
 	}
+}
+
+void VSTPluginFilterGUI::openOutProcPanel()
+{
+	if (outProcGuiProcess != nullptr)
+	{
+		if (outProcGuiHidden)
+		{
+			signalOutProcPanel(L"GuiShow");
+			outProcGuiHidden = false;
+			ui->openPanelButton->setText(tr("Hide panel"));
+		}
+		else
+		{
+			signalOutProcPanel(L"GuiHide");
+			outProcGuiHidden = true;
+			ui->openPanelButton->setText(tr("Show panel"));
+		}
+		return;
+	}
+
+	if (library->getLibPath() == L"")
+		return;
+
+	const QString hostExe = "EqApoOutProcHost.exe";
+	QString hostPath = QDir(QCoreApplication::applicationDirPath()).absoluteFilePath(hostExe);
+	if (!QFile::exists(hostPath))
+	{
+		QMessageBox::warning(this, tr("VST plugin"), tr("%1 was not found next to Editor.exe.").arg(hostExe));
+		return;
+	}
+
+	outProcGuiConfigPath = QDir::temp().absoluteFilePath("EqApoVSTGui-" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".opvs");
+	OutProcVSTConfig config;
+	config.libraryPath = library->getLibPath();
+	config.chunkData = chunkData;
+	config.paramMap = paramMap;
+	if (!OutProcWriteVSTConfig(outProcGuiConfigPath.toStdWString(), config))
+	{
+		QMessageBox::warning(this, tr("VST plugin"), tr("Could not create temporary VST host configuration."));
+		outProcGuiConfigPath.clear();
+		return;
+	}
+
+	QStringList arguments;
+	arguments << "--gui" << "--session" << hostId << "--vst-config" << outProcGuiConfigPath;
+	appendOutProcDebugLog("open panel hostId=" + hostId + " config=" + outProcGuiConfigPath);
+
+	outProcGuiProcess = new QProcess(this);
+	outProcGuiProcess->setProgram(hostPath);
+	outProcGuiProcess->setArguments(arguments);
+	connect(outProcGuiProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+		[this](int exitCode, QProcess::ExitStatus) {
+			finishOutProcPanel(exitCode);
+		});
+	connect(outProcGuiProcess, &QProcess::errorOccurred, this,
+		[this](QProcess::ProcessError error) {
+			if (error == QProcess::FailedToStart)
+			{
+				QMessageBox::warning(this, tr("VST plugin"), tr("Could not start the out-of-process VST host."));
+				finishOutProcPanel(-1);
+			}
+		});
+
+	outProcGuiProcess->start();
+	outProcGuiHidden = false;
+	ui->openPanelButton->setText(tr("Hide panel"));
+	ui->statusLabel->setText(tr("Out-of-process VST panel is open"));
+	idleTimer.start();
+}
+
+void VSTPluginFilterGUI::finishOutProcPanel(int exitCode)
+{
+	if (exitCode == 0 && !outProcGuiConfigPath.isEmpty())
+	{
+		OutProcVSTConfig updatedConfig;
+		if (OutProcReadVSTConfig(outProcGuiConfigPath.toStdWString(), updatedConfig))
+		{
+			chunkData = updatedConfig.chunkData;
+			paramMap = updatedConfig.paramMap;
+			updateModel();
+		}
+	}
+
+	if (!outProcGuiConfigPath.isEmpty())
+		QFile::remove(outProcGuiConfigPath);
+	outProcGuiConfigPath.clear();
+
+	if (outProcGuiProcess != nullptr)
+	{
+		outProcGuiProcess->deleteLater();
+		outProcGuiProcess = nullptr;
+	}
+
+	ui->openPanelButton->setText(tr("Open panel"));
+	ui->statusLabel->setText(exitCode == 0 ? tr("Out-of-process VST host") : tr("Out-of-process VST panel closed unexpectedly"));
+}
+
+bool VSTPluginFilterGUI::signalOutProcPanel(const wchar_t* suffix)
+{
+	QString objectName = makeOutProcObjectName(hostId, suffix);
+	HANDLE eventHandle = OpenEventW(EVENT_MODIFY_STATE, FALSE, reinterpret_cast<LPCWSTR>(objectName.utf16()));
+	if (eventHandle == NULL)
+	{
+		appendOutProcDebugLog("signal " + QString::fromWCharArray(suffix) + " hostId=" + hostId + " open failed gle=" + QString::number(GetLastError()));
+		return false;
+	}
+	const BOOL ok = SetEvent(eventHandle);
+	CloseHandle(eventHandle);
+	appendOutProcDebugLog("signal " + QString::fromWCharArray(suffix) + " hostId=" + hostId + " ok=" + QString(ok ? "true" : "false") + " gle=" + QString::number(GetLastError()));
+	return ok == TRUE;
+}
+
+bool VSTPluginFilterGUI::consumeOutProcPanelSignal(const wchar_t* suffix)
+{
+	QString objectName = makeOutProcObjectName(hostId, suffix);
+	HANDLE eventHandle = OpenEventW(SYNCHRONIZE, FALSE, reinterpret_cast<LPCWSTR>(objectName.utf16()));
+	if (eventHandle == NULL)
+		return false;
+	const DWORD waitResult = WaitForSingleObject(eventHandle, 0);
+	CloseHandle(eventHandle);
+	return waitResult == WAIT_OBJECT_0;
+}
+
+static bool terminateOutProcPidForHostId(const QString& hostId)
+{
+	QString objectName = makeOutProcObjectName(hostId, L"GuiInfo");
+	HANDLE mapping = OpenFileMappingW(FILE_MAP_READ, FALSE, reinterpret_cast<LPCWSTR>(objectName.utf16()));
+	if (mapping == NULL)
+	{
+		appendOutProcDebugLog("pid mapping open failed hostId=" + hostId + " gle=" + QString::number(GetLastError()));
+		return false;
+	}
+
+	OutProcGuiInfo* info = static_cast<OutProcGuiInfo*>(MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, sizeof(OutProcGuiInfo)));
+	if (info == nullptr)
+	{
+		CloseHandle(mapping);
+		appendOutProcDebugLog("pid mapping view failed hostId=" + hostId + " gle=" + QString::number(GetLastError()));
+		return false;
+	}
+
+	const DWORD pid = (info->magic == OUTPROC_GUI_INFO_MAGIC && info->version == OUTPROC_GUI_INFO_VERSION) ? info->processId : 0;
+	UnmapViewOfFile(info);
+	CloseHandle(mapping);
+
+	if (pid == 0 || pid == GetCurrentProcessId())
+	{
+		appendOutProcDebugLog("pid mapping invalid hostId=" + hostId + " pid=" + QString::number(pid));
+		return false;
+	}
+
+	HANDLE process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pid);
+	if (process == NULL)
+	{
+		appendOutProcDebugLog("pid mapping open process failed hostId=" + hostId + " pid=" + QString::number(pid) + " gle=" + QString::number(GetLastError()));
+		return false;
+	}
+
+	TerminateProcess(process, 0);
+	WaitForSingleObject(process, 1000);
+	CloseHandle(process);
+	appendOutProcDebugLog("pid mapping terminated hostId=" + hostId + " pid=" + QString::number(pid));
+	return true;
+}
+
+static QString makeOutProcPidPath(const QString& hostId)
+{
+	QString safeId = hostId;
+	for (QChar& ch : safeId)
+	{
+		const bool ok = ch.isLetterOrNumber() || ch == '-' || ch == '_';
+		if (!ok)
+			ch = '_';
+	}
+	return QDir::temp().absoluteFilePath("EqApoOutProcHost-" + safeId + ".pid");
+}
+
+static bool terminateOutProcPidFileForHostId(const QString& hostId)
+{
+	const QString path = makeOutProcPidPath(hostId);
+	QFile file(path);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+	{
+		appendOutProcDebugLog("pid file open failed hostId=" + hostId + " path=" + path);
+		return false;
+	}
+
+	bool ok = false;
+	const DWORD pid = file.readAll().trimmed().toULong(&ok);
+	file.close();
+	if (!ok || pid == 0 || pid == GetCurrentProcessId())
+	{
+		appendOutProcDebugLog("pid file invalid hostId=" + hostId + " path=" + path + " pid=" + QString::number(pid));
+		return false;
+	}
+
+	HANDLE process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, pid);
+	if (process == NULL)
+	{
+		appendOutProcDebugLog("pid file open process failed hostId=" + hostId + " pid=" + QString::number(pid) + " gle=" + QString::number(GetLastError()));
+		return false;
+	}
+
+	TerminateProcess(process, 0);
+	WaitForSingleObject(process, 1000);
+	CloseHandle(process);
+	QFile::remove(path);
+	appendOutProcDebugLog("pid file terminated hostId=" + hostId + " pid=" + QString::number(pid) + " path=" + path);
+	return true;
+}
+
+void VSTPluginFilterGUI::closeOutProcPanel()
+{
+	if (outProcGuiProcess == nullptr)
+		return;
+
+	QProcess* process = outProcGuiProcess;
+	disconnect(process, nullptr, this, nullptr);
+	outProcGuiProcess = nullptr;
+	signalOutProcPanel(L"GuiHide");
+	process->setParent(nullptr);
+	connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), process, &QObject::deleteLater);
+
+	if (!outProcGuiConfigPath.isEmpty())
+		QFile::remove(outProcGuiConfigPath);
+	outProcGuiConfigPath.clear();
+
+	if (ui != nullptr)
+	{
+		ui->openPanelButton->setText(tr("Open panel"));
+		ui->statusLabel->setText(tr("Out-of-process VST host"));
+	}
+}
+
+void VSTPluginFilterGUI::terminateOutProcPanel()
+{
+	appendOutProcDebugLog("terminate panel hostId=" + hostId + " hasQProcess=" + QString(outProcGuiProcess != nullptr ? "true" : "false"));
+	signalOutProcPanel(L"GuiExit");
+	terminateOutProcPidForHostId(hostId);
+	terminateOutProcPidFileForHostId(hostId);
+
+	if (outProcGuiProcess == nullptr)
+		return;
+
+	QProcess* process = outProcGuiProcess;
+	disconnect(process, nullptr, this, nullptr);
+	outProcGuiProcess = nullptr;
+	process->terminate();
+	if (!process->waitForFinished(750))
+		process->kill();
+	process->deleteLater();
+
+	if (!outProcGuiConfigPath.isEmpty())
+	{
+		OutProcVSTConfig updatedConfig;
+		if (OutProcReadVSTConfig(outProcGuiConfigPath.toStdWString(), updatedConfig))
+		{
+			chunkData = updatedConfig.chunkData;
+			paramMap = updatedConfig.paramMap;
+		}
+		QFile::remove(outProcGuiConfigPath);
+	}
+	outProcGuiConfigPath.clear();
+	outProcGuiHidden = false;
 }
 
 void VSTPluginFilterGUI::applyDialog()
@@ -231,6 +555,11 @@ void VSTPluginFilterGUI::on_pathLineEdit_editingFinished()
 	if (QString::fromStdWString(library->getLibPath()) != ui->pathLineEdit->text())
 	{
 		int oldId = 0;
+		if (outProcMode)
+		{
+			terminateOutProcPanel();
+			hostId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+		}
 		if (effect != NULL)
 		{
 			oldId = effect->uniqueID();
@@ -242,9 +571,10 @@ void VSTPluginFilterGUI::on_pathLineEdit_editingFinished()
 		if (path.length() > 0)
 			path = QDir::toNativeSeparators(QFileInfo(pluginsDir, ui->pathLineEdit->text()).absoluteFilePath());
 		library = VSTPluginLibrary::getInstance(path.toStdWString());
-		initPlugin();
+		if (!outProcMode)
+			initPlugin();
 
-		if (effect == NULL || oldId == 0 || effect->uniqueID() != oldId)
+		if (outProcMode || effect == NULL || oldId == 0 || effect->uniqueID() != oldId)
 		{
 			chunkData = L"";
 			paramMap.clear();
@@ -288,6 +618,28 @@ void VSTPluginFilterGUI::on_selectButton_clicked()
 
 void VSTPluginFilterGUI::on_idle()
 {
+	if (outProcMode && outProcGuiProcess != nullptr && consumeOutProcPanelSignal(L"GuiHidden"))
+	{
+		outProcGuiHidden = true;
+		ui->openPanelButton->setText(tr("Show panel"));
+	}
+
+	if (outProcMode && outProcGuiProcess != nullptr && !outProcGuiConfigPath.isEmpty())
+	{
+		if (!lastReadTimer.isValid() || lastReadTimer.elapsed() > 500)
+		{
+			OutProcVSTConfig updatedConfig;
+			if (OutProcReadVSTConfig(outProcGuiConfigPath.toStdWString(), updatedConfig)
+				&& (chunkData != updatedConfig.chunkData || paramMap != updatedConfig.paramMap))
+			{
+				chunkData = updatedConfig.chunkData;
+				paramMap = updatedConfig.paramMap;
+				updateModel();
+			}
+			lastReadTimer.restart();
+		}
+	}
+
 	if (effect != NULL)
 	{
 		if (autoApplyDialog)
