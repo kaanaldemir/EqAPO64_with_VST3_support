@@ -48,6 +48,30 @@
 
 using namespace std;
 
+namespace
+{
+bool matchesStoredDevice(const shared_ptr<AbstractAPOInfo>& apoInfo, const QString& storedDevice)
+{
+	if (apoInfo == NULL || storedDevice.isEmpty())
+		return false;
+
+	const QString deviceString = QString::fromStdWString(apoInfo->getDeviceString());
+	const QString deviceGuid = QString::fromStdWString(apoInfo->getDeviceGuid());
+	return deviceString.compare(storedDevice, Qt::CaseInsensitive) == 0
+		|| (!deviceGuid.isEmpty()
+			&& (deviceGuid.compare(storedDevice, Qt::CaseInsensitive) == 0
+				|| storedDevice.contains(deviceGuid, Qt::CaseInsensitive)));
+}
+
+bool hasInstalledDevice(const QList<shared_ptr<AbstractAPOInfo>>& devices)
+{
+	for (const shared_ptr<AbstractAPOInfo>& apoInfo : devices)
+		if (apoInfo != NULL && apoInfo->isInstalled())
+			return true;
+	return false;
+}
+}
+
 MainWindow::MainWindow(QDir configDir, QWidget* parent)
 	: QMainWindow(parent), ui(new Ui::MainWindow), configDir(configDir)
 {
@@ -185,7 +209,7 @@ void MainWindow::doChecks()
 		}
 	}
 
-	if (defaultOutputDevice != NULL && !defaultOutputDevice->isInstalled())
+	if (!hasInstalledDevice(outputDevices) && !hasInstalledDevice(inputDevices))
 	{
 		if (QMessageBox::warning(this, tr("APO not installed to device"), tr("Equalizer APO has not been installed to the selected device.\nDo you want to run the Device Selector application to fix the problem?"), QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)
 		{
@@ -981,13 +1005,10 @@ void MainWindow::loadPreferences()
 		for (int i = 0; i < deviceComboBox->count(); i++)
 		{
 			shared_ptr<AbstractAPOInfo> apoInfo = deviceComboBox->itemData(i).value<shared_ptr<AbstractAPOInfo>>();
-			if (apoInfo != NULL)
+			if (matchesStoredDevice(apoInfo, selectedDevice))
 			{
-				if (QString::fromStdWString(apoInfo->getDeviceString()).compare(selectedDevice, Qt::CaseInsensitive) == 0)
-				{
-					deviceComboBox->setCurrentIndex(i);
-					break;
-				}
+				deviceComboBox->setCurrentIndex(i);
+				break;
 			}
 		}
 	}
@@ -1060,7 +1081,7 @@ void MainWindow::savePreferences()
 	settings.setValue("windowState", saveState());
 	settings.setValue("instantMode", instantModeCheckBox->isChecked());
 	shared_ptr<AbstractAPOInfo> selectedDevice = deviceComboBox->currentData().value<shared_ptr<AbstractAPOInfo>>();
-	settings.setValue("selectedDevice", selectedDevice != NULL ? QString::fromStdWString(selectedDevice->getDeviceString()) : "");
+	settings.setValue("selectedDevice", selectedDevice != NULL ? QString::fromStdWString(selectedDevice->getDeviceGuid().empty() ? selectedDevice->getDeviceString() : selectedDevice->getDeviceGuid()) : "");
 	int channelMask = channelConfigurationComboBox->currentData().toInt();
 	settings.setValue("selectedChannelMask", channelMask);
 

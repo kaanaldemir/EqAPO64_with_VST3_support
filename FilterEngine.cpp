@@ -65,6 +65,49 @@
 using namespace std;
 using namespace mup;
 
+namespace
+{
+template<typename Sample>
+void bypassInterleaved(Sample* output, const Sample* input, unsigned inputChannels, unsigned outputChannels, unsigned frameCount)
+{
+	if (output == input)
+		return;
+
+	if (inputChannels == outputChannels)
+	{
+		memcpy(output, input, outputChannels * frameCount * sizeof(Sample));
+		return;
+	}
+
+	const unsigned copyChannels = min(inputChannels, outputChannels);
+	for (unsigned frame = 0; frame < frameCount; frame++)
+	{
+		const Sample* inputFrame = input + frame * inputChannels;
+		Sample* outputFrame = output + frame * outputChannels;
+		for (unsigned channel = 0; channel < copyChannels; channel++)
+			outputFrame[channel] = inputFrame[channel];
+		for (unsigned channel = copyChannels; channel < outputChannels; channel++)
+			outputFrame[channel] = Sample();
+	}
+}
+
+template<typename Sample>
+void bypassPlanar(Sample** output, Sample** input, unsigned inputChannels, unsigned outputChannels, unsigned frameCount)
+{
+	if (output == input)
+		return;
+
+	const unsigned copyChannels = min(inputChannels, outputChannels);
+	for (unsigned channel = 0; channel < copyChannels; channel++)
+	{
+		if (output[channel] != input[channel])
+			memcpy(output[channel], input[channel], frameCount * sizeof(Sample));
+	}
+	for (unsigned channel = copyChannels; channel < outputChannels; channel++)
+		memset(output[channel], 0, frameCount * sizeof(Sample));
+}
+}
+
 FilterEngine::FilterEngine()
 	: parser(nullptr),
 	  allocatedFrameCount(0),
@@ -493,10 +536,7 @@ void FilterEngine::process(float* output, float* input, unsigned frameCount)
 {
 	if (currentConfig->isEmpty() && nextConfig == NULL)
 	{
-		// Bypass mode: if no filters are active, just copy input to output if necessary.
-		if (realChannelCount == outputChannelCount && input != output) {
-			memcpy(output, input, outputChannelCount * frameCount * sizeof(float));
-		}
+		bypassInterleaved(output, input, inputChannelCount, outputChannelCount, frameCount);
 		return;
 	}
 
@@ -539,11 +579,7 @@ void FilterEngine::process(float** output, float** input, unsigned frameCount)
 {
 	if (currentConfig->isEmpty() && nextConfig == NULL)
 	{
-		// Bypass mode
-		if (realChannelCount == outputChannelCount && input != output) {
-			for (unsigned c = 0; c < realChannelCount; c++)
-				memcpy(output[c], input[c], frameCount * sizeof(float));
-		}
+		bypassPlanar(output, input, inputChannelCount, outputChannelCount, frameCount);
 		return;
 	}
 
@@ -594,10 +630,7 @@ void FilterEngine::process(double* output, double* input, unsigned frameCount)
 {
 	if (currentConfig->isEmpty() && nextConfig == NULL)
 	{
-		// Bypass mode: if no filters are active, just copy input to output if necessary.
-		if (realChannelCount == outputChannelCount && input != output) {
-			memcpy(output, input, outputChannelCount * frameCount * sizeof(double));
-		}
+		bypassInterleaved(output, input, inputChannelCount, outputChannelCount, frameCount);
 		return;
 	}
 
@@ -629,11 +662,7 @@ void FilterEngine::process(double** output, double** input, unsigned frameCount)
 {
 	if (currentConfig->isEmpty() && nextConfig == NULL)
 	{
-		// Bypass mode
-		if (realChannelCount == outputChannelCount && input != output) {
-			for (unsigned c = 0; c < realChannelCount; c++)
-				memcpy(output[c], input[c], frameCount * sizeof(double));
-		}
+		bypassPlanar(output, input, inputChannelCount, outputChannelCount, frameCount);
 		return;
 	}
 
