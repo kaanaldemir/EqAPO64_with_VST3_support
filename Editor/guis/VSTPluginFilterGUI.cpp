@@ -110,7 +110,6 @@ void VSTPluginFilterGUI::store(QString& command, QString& parameters)
 	parameters = "Library " + relativePath;
 	if (outProcMode)
 		parameters += " HostId " + hostId;
-
 	if (chunkData != L"")
 	{
 		parameters += " ChunkData \"" + QString::fromStdWString(chunkData) + "\"";

@@ -27,6 +27,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <algorithm>
 
 using namespace std;
 

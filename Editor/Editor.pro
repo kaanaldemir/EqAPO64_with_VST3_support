@@ -53,8 +53,19 @@ SOURCES += main.cpp\
 	guis/CopyFilterGUI.cpp \
 	guis/CopyFilterGUIConnectionItem.cpp \
 	guis/CopyFilterGUIChannelItem.cpp \
+	guis/AudioToolFilterGUIFactory.cpp \
 	../filters/CopyFilter.cpp \
 	../filters/CopyFilterFactory.cpp \
+	../filters/PanFilter.cpp \
+	../filters/PanFilterFactory.cpp \
+	../filters/ChorusFilter.cpp \
+	../filters/ChorusFilterFactory.cpp \
+	../filters/ReverbFilter.cpp \
+	../filters/ReverbFilterFactory.cpp \
+	../filters/ToneGeneratorFilter.cpp \
+	../filters/ToneGeneratorFilterFactory.cpp \
+	../filters/VUMeterFilter.cpp \
+	../filters/VUMeterFilterFactory.cpp \
 	../IFilter.cpp \
 	guis/CopyFilterGUIScene.cpp \
 	guis/CopyFilterGUIForm.cpp \
@@ -175,8 +186,21 @@ HEADERS  += \
 	guis/CopyFilterGUI.h \
 	guis/CopyFilterGUIConnectionItem.h \
 	guis/CopyFilterGUIChannelItem.h \
+	guis/AudioToolFilterGUIFactory.h \
 	../filters/CopyFilter.h \
 	../filters/CopyFilterFactory.h \
+	../filters/AudioToolsHelper.h \
+	../filters/PanFilter.h \
+	../filters/PanFilterFactory.h \
+	../filters/ChorusFilter.h \
+	../filters/ChorusFilterFactory.h \
+	../filters/ReverbFilter.h \
+	../filters/ReverbFilterFactory.h \
+	../filters/ToneGeneratorFilter.h \
+	../filters/ToneGeneratorFilterFactory.h \
+	../filters/VUMeterProtocol.h \
+	../filters/VUMeterFilter.h \
+	../filters/VUMeterFilterFactory.h \
 	../IFilter.h \
 	../IFilterFactory.h \
 	guis/CopyFilterGUIScene.h \

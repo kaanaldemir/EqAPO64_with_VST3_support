@@ -302,7 +302,6 @@ void VSTPluginFilter::process(double** output, double** input, unsigned frameCou
 		skipProcessing = true;
 	}
 }
-#pragma AVRT_CODE_END
 
 std::shared_ptr<VSTPluginLibrary> VSTPluginFilter::getLibrary() const
 {

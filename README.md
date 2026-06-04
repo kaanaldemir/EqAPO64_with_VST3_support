@@ -9,11 +9,16 @@ NOTE: This build was compiled for Windows 10/11 64 bits with AVX2 support only (
 
 ## Main Features
 
-- Double procession processing (64 bit internal pipeline) for precision and quality when applying multiple overlapping effects. Examples include convolution, complex parametric EQ setups or GraphicEQ's. 
+- Double-precision processing through the 64-bit internal pipeline for precision
+  when applying multiple overlapping effects, including convolution, complex
+  parametric EQ configurations and GraphicEQ curves.
 - Native VST3 hosting through the Steinberg VST3 SDK.
 - Existing VST2 support retained for older plug-ins.
 - Experimental out-of-process VST hosting for isolating plug-ins from the
   Configuration Editor and the APO audio engine.
+- Native pan, chorus, reverb, tone-generator and professional VU-meter filters.
+- GraphicEQ FIR export and explicit IR/FIR sample-rate validation for
+  convolution.
 - Configuration Editor workflow preserved.
 - Reproducible installer build using local dependencies under `third_party/`.
 - NSIS-based installer packaging for end users.
@@ -44,6 +49,69 @@ PluginName.vst3/Contents/x86_64-win/PluginName.vst3
 ```
 
 If a plug-in does not show its editor, does not animate, process the audio with artifacts or crashes when opened or removed, test it first in a standard VST3 host or DAW. Some plug-ins require host features that Equalizer APO does not provide.
+
+## Audio Tools And Convolution Update - June 3, 2026 (Exp Branch)
+
+The June 3, 2026 update extends the experimental branch with native audio
+tools, measurement features, FIR export and a safer convolution workflow. The
+new filters use the same Equalizer APO pipeline as the existing filters and can
+therefore be applied to both playback and capture devices when the APO is
+installed on the selected endpoint.
+
+### Native DSP Filters
+
+- Adds a channel-aware `Pan:` filter for positioning and stereo-width control.
+- Adds a native `Chorus:` filter with adjustable rate, depth, mix and feedback.
+- Adds a lightweight native `Reverb:` filter with room size, damping, wet/dry
+  balance and width controls.
+- Provides practical slider controls for these filters instead of
+  requiring users to edit every parameter manually.
+- Supports applying the filters to all available channels or selected channels,
+  including common surround layouts.
+
+### Tone Generator
+
+- Adds a native `ToneGenerator:` filter that generates audio directly inside
+  the APO pipeline.
+- Supports sine, white-noise, pink-noise, brown-noise and looping sine-sweep
+  modes.
+- Provides play/stop, level, frequency, sweep range, duration, channel
+  selection and replace/mix controls.
+- Can target all available channels or selected channels on playback and
+  capture endpoints.
+
+### Professional VU Meter
+
+- Adds a pass-through `VUMeter:` filter that measures the real audio stream at
+  its exact position in the configuration.
+- Provides a resizable floating DAW-style meter panel from the filter row.
+- Displays per-channel peak, peak hold, RMS, clipping and dB scales together
+  with LUFS momentary, short-term and integrated measurements.
+- Supports reset and channel-aware metering without altering the audio signal.
+- Can meter microphone or other capture-device audio when placed in a
+  `Stage: capture` section. It measures only audio that actually passes through
+  Equalizer APO; WASAPI exclusive and ASIO streams that bypass APO are not
+  visible to the meter.
+
+### Convolution And FIR Workflow
+
+- Fixes convolution memory handling and improves stability when audio block
+  sizes change.
+- Adds an internal HybridConv correctness benchmark covering 44.1, 48, 96 and
+  192 kHz processing.
+- Requires loaded IR/FIR files to match the current device sample rate. A
+  mismatched IR/FIR is clearly reported and is not applied, preventing silent
+  timbre changes caused by interpreting the impulse response at the wrong
+  sample rate.
+- Detects IR/FIR sample-rate mismatches immediately when a file is selected or
+  its path is edited, using the live sample rate reported by the current audio
+  endpoint.
+- Adds a **Regenerate / create a sample-rate-matched IR/FIR for the current
+  device** action beside the displayed sample rate. It extracts the loaded
+  IR/FIR magnitude response and regenerates a new matched FIR for the current
+  device sample rate.
+- Adds FIR export from GraphicEQ at the selected device sample rate, providing
+  the preferred path for creating native FIR files from custom EQ curves.
 
 ## Installer Update - June 1, 2026 (Exp Branch)
 

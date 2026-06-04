@@ -51,6 +51,11 @@
 #include "filters/IIRFilterFactory.h"
 #include "filters/PreampFilterFactory.h"
 #include "filters/OutputGuardFilterFactory.h"
+#include "filters/PanFilterFactory.h"
+#include "filters/ChorusFilterFactory.h"
+#include "filters/ReverbFilterFactory.h"
+#include "filters/ToneGeneratorFilterFactory.h"
+#include "filters/VUMeterFilterFactory.h"
 #include "filters/OutProcGainFilterFactory.h"
 #include "filters/OutProcBiquadFilterFactory.h"
 #include "filters/OutProcVSTPluginFilterFactory.h"
@@ -140,6 +145,11 @@ FilterEngine::FilterEngine()
 	factories.push_back(new BiQuadFilterFactory());
 	factories.push_back(new PreampFilterFactory());
 	factories.push_back(new OutputGuardFilterFactory());
+	factories.push_back(new PanFilterFactory());
+	factories.push_back(new ChorusFilterFactory());
+	factories.push_back(new ReverbFilterFactory());
+	factories.push_back(new ToneGeneratorFilterFactory());
+	factories.push_back(new VUMeterFilterFactory());
 	factories.push_back(new OutProcGainFilterFactory());
 	factories.push_back(new OutProcBiquadFilterFactory());
 	factories.push_back(new OutProcVSTPluginFilterFactory());

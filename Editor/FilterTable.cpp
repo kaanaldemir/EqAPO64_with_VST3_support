@@ -50,6 +50,7 @@
 #include "guis/ConvolutionFilterGUIFactory.h"
 #include "guis/VSTPluginFilterGUIFactory.h"
 #include "guis/LoudnessCorrectionFilterGUIFactory.h"
+#include "guis/AudioToolFilterGUIFactory.h"
 #include "Editor/helpers/GUIHelper.h"
 #include "helpers/StringHelper.h"
 #include "helpers/LogHelper.h"
@@ -79,6 +80,11 @@ FilterTable::FilterTable(MainWindow* mainWindow, QWidget* parent)
 	factories.append(new BiQuadFilterGUIFactory);
 	factories.append(new DelayFilterGUIFactory);
 	factories.append(new CopyFilterGUIFactory);
+	factories.append(new PanFilterGUIFactory);
+	factories.append(new ChorusFilterGUIFactory);
+	factories.append(new ReverbFilterGUIFactory);
+	factories.append(new ToneGeneratorFilterGUIFactory);
+	factories.append(new VUMeterFilterGUIFactory);
 	factories.append(new GraphicEQFilterGUIFactory);
 	factories.append(new ConvolutionFilterGUIFactory);
 	factories.append(new VSTPluginFilterGUIFactory);

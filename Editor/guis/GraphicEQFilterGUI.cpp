@@ -19,10 +19,14 @@
 
 #include <vector>
 #include <QFileDialog>
+#include <QMessageBox>
 #include <QScrollBar>
 #include <QTextStream>
+#define ENABLE_SNDFILE_WINDOWS_PROTOTYPES 1
+#include <sndfile.h>
 
 #include "helpers/GainIterator.h"
+#include "DeviceAPOInfo.h"
 #include "Editor/helpers/GUIHelper.h"
 #include "Editor/widgets/ResizeCorner.h"
 #include "Editor/FilterTable.h"
@@ -68,9 +72,12 @@ GraphicEQFilterGUI::GraphicEQFilterGUI(GraphicEQFilter* filter, QString configPa
 
 	ui->toolBar->addAction(ui->actionImport);
 	ui->toolBar->addAction(ui->actionExport);
+	QAction* exportFirAction = new QAction(ui->actionExport->icon(), tr("Export FIR"), this);
+	ui->toolBar->addAction(exportFirAction);
 	ui->toolBar->addAction(ui->actionInvertResponse);
 	ui->toolBar->addAction(ui->actionNormalizeResponse);
 	ui->toolBar->addAction(ui->actionResetResponse);
+	connect(exportFirAction, &QAction::triggered, this, &GraphicEQFilterGUI::on_actionExportFIR_triggered);
 
 	connect(scene, SIGNAL(nodeInserted(int,double,double)), this, SLOT(insertRow(int,double,double)));
 	connect(scene, SIGNAL(nodeRemoved(int)), this, SLOT(removeRow(int)));
@@ -80,6 +87,11 @@ GraphicEQFilterGUI::GraphicEQFilterGUI(GraphicEQFilter* filter, QString configPa
 	connect(scene, SIGNAL(updateModel()), this, SIGNAL(updateModel()));
 
 	scene->setNodes(filter->getNodes());
+	if (filterTable != nullptr && filterTable->getSelectedDevice() != nullptr && filterTable->getSelectedDevice()->getSampleRate() != 0)
+	{
+		deviceSampleRate = filterTable->getSelectedDevice()->getSampleRate();
+		deviceGuid = QString::fromStdWString(filterTable->getSelectedDevice()->getDeviceGuid());
+	}
 
 	int bandCount = scene->verifyBands(filter->getNodes());
 	switch (bandCount)
@@ -304,6 +316,18 @@ void GraphicEQFilterGUI::setFreqEditable(bool editable)
 	ui->tableWidget->blockSignals(false);
 }
 
+unsigned GraphicEQFilterGUI::currentDeviceSampleRate() const
+{
+	if (!deviceGuid.isEmpty())
+	{
+		DeviceAPOInfo info;
+		if (info.load(deviceGuid.toStdWString()) && info.getSampleRate() != 0)
+			return info.getSampleRate();
+	}
+
+	return deviceSampleRate != 0 ? deviceSampleRate : 48000;
+}
+
 void GraphicEQFilterGUI::on_actionImport_triggered()
 {
 	QFileInfo fileInfo(configPath);
@@ -403,6 +427,53 @@ void GraphicEQFilterGUI::on_actionExport_triggered()
 			stream.flush();
 		}
 	}
+}
+
+void GraphicEQFilterGUI::on_actionExportFIR_triggered()
+{
+	QFileInfo fileInfo(configPath);
+	const unsigned sampleRate = currentDeviceSampleRate();
+	QFileDialog dialog(this, tr("Export FIR impulse response"), fileInfo.absolutePath(), "*.wav");
+	dialog.setFileMode(QFileDialog::AnyFile);
+	dialog.setAcceptMode(QFileDialog::AcceptSave);
+	QStringList nameFilters;
+	nameFilters.append(tr("FIR impulse response (*.wav)"));
+	nameFilters.append(tr("All files (*.*)"));
+	dialog.setNameFilters(nameFilters);
+	dialog.setDefaultSuffix(".wav");
+	dialog.selectFile(QString("GraphicEQ_FIR_%0Hz.wav").arg(sampleRate));
+
+	if (dialog.exec() != QDialog::Accepted)
+		return;
+
+	QString savePath = dialog.selectedFiles().first();
+	std::vector<double> impulse = GraphicEQFilter::createImpulseResponse(scene->getNodes(), 16384, static_cast<float>(sampleRate));
+	if (impulse.empty())
+	{
+		QMessageBox::warning(this, tr("Export FIR"), tr("Could not generate FIR impulse response."));
+		return;
+	}
+
+	SF_INFO info = {};
+	info.channels = 1;
+	info.samplerate = static_cast<int>(sampleRate);
+	info.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+	SNDFILE* file = sf_wchar_open(savePath.toStdWString().c_str(), SFM_WRITE, &info);
+	if (file == nullptr)
+	{
+		QMessageBox::warning(this, tr("Export FIR"), tr("Could not create FIR file."));
+		return;
+	}
+
+	sf_count_t written = sf_writef_double(file, impulse.data(), static_cast<sf_count_t>(impulse.size()));
+	sf_close(file);
+	if (written != static_cast<sf_count_t>(impulse.size()))
+	{
+		QMessageBox::warning(this, tr("Export FIR"), tr("Could not write the complete FIR file."));
+		return;
+	}
+
+	QMessageBox::information(this, tr("Export FIR"), tr("Exported FIR at %0 Hz.").arg(sampleRate));
 }
 
 void GraphicEQFilterGUI::on_actionInvertResponse_triggered()

@@ -60,15 +60,19 @@ private slots:
 
 	void on_actionImport_triggered();
 	void on_actionExport_triggered();
+	void on_actionExportFIR_triggered();
 	void on_actionInvertResponse_triggered();
 	void on_actionNormalizeResponse_triggered();
 	void on_actionResetResponse_triggered();
 
 private:
 	void setFreqEditable(bool editable);
+	unsigned currentDeviceSampleRate() const;
 
 	Ui::GraphicEQFilterGUI* ui;
 	GraphicEQFilterGUIScene* scene;
 	QString configPath;
+	QString deviceGuid;
+	unsigned deviceSampleRate = 48000;
 	static QRegularExpression numberRegEx;
 };

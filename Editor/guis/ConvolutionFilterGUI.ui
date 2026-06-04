@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string notr="true"/>
   </property>
-  <layout class="QGridLayout" name="gridLayout" columnstretch="0,0,0,0,1">
+  <layout class="QGridLayout" name="gridLayout" columnstretch="0,1,0,0">
    <property name="leftMargin">
     <number>0</number>
    </property>
@@ -36,19 +36,6 @@
        <normaloff>:/icons/document-open.ico</normaloff>:/icons/document-open.ico</iconset>
      </property>
     </widget>
-   </item>
-   <item row="0" column="4">
-    <spacer name="horizontalSpacer">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>123</width>
-       <height>1</height>
-      </size>
-     </property>
-    </spacer>
    </item>
    <item row="0" column="0">
     <widget class="QLabel" name="convolutionLabel">
@@ -87,7 +74,7 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="0" colspan="5">
+      <item row="1" column="0" colspan="6">
        <widget class="QLabel" name="labelError">
         <property name="palette">
          <palette>
@@ -128,6 +115,16 @@
         </property>
         <property name="text">
          <string notr="true"/>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="5">
+       <widget class="QPushButton" name="matchSampleRatePushButton">
+        <property name="toolTip">
+         <string>Extract the loaded IR/FIR magnitude response and regenerate a sample-rate-matched FIR for the current audio device.</string>
+        </property>
+        <property name="text">
+         <string>Regenerate / create a sample-rate-matched IR/FIR for the current device</string>
         </property>
        </widget>
       </item>

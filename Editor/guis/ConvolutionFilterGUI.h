@@ -30,7 +30,7 @@ class ConvolutionFilterGUI : public IFilterGUI
 	Q_OBJECT
 
 public:
-	explicit ConvolutionFilterGUI(const QString& configPath, unsigned deviceSampleRate, const QString& path);
+	explicit ConvolutionFilterGUI(const QString& configPath, unsigned deviceSampleRate, const QString& deviceGuid, const QString& path);
 	~ConvolutionFilterGUI();
 
 	void store(QString& command, QString& parameters) override;
@@ -41,9 +41,14 @@ private slots:
 	void on_pathLineEdit_editingFinished();
 
 private:
+	QString absoluteImpulsePath() const;
+	unsigned refreshDeviceSampleRate() const;
+	unsigned liveDeviceSampleRate() const;
+	void matchDeviceSampleRate();
 	void updateFileInfo();
 
 	Ui::ConvolutionFilterGUI* ui;
 	QString configPath;
+	QString deviceGuid;
 	unsigned deviceSampleRate;
 };

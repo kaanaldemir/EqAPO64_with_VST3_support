@@ -25,18 +25,182 @@
 #include <cstdio>
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <algorithm>
 #include <string>
+#include <vector>
 #include <sndfile.h>
 #include <tclap/CmdLine.h>
+#include <fftw3.h>
 
 #include "../version.h"
 #include "../FilterEngine.h"
+#include "../libHybridConv-0.1.1/libHybridConv_eapo.h"
 #include "../helpers/LogHelper.h"
 #include "../helpers/StringHelper.h"
 #include "../helpers/PrecisionTimer.h"
 #include "../helpers/MemoryHelper.h"
 
 using namespace std;
+
+static int nextPowerOfTwo(int value)
+{
+	int result = 1;
+	while (result < value)
+		result <<= 1;
+	return result;
+}
+
+static void referenceConvolutionFft(const vector<double>& input, const vector<double>& impulse, vector<double>& output)
+{
+	const int resultLength = (int)(input.size() + impulse.size() - 1);
+	const int fftLength = nextPowerOfTwo(resultLength);
+
+	double* xTime = (double*)fftw_malloc(sizeof(double) * fftLength);
+	double* hTime = (double*)fftw_malloc(sizeof(double) * fftLength);
+	fftw_complex* xFreq = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * (fftLength / 2 + 1));
+	fftw_complex* hFreq = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * (fftLength / 2 + 1));
+
+	memset(xTime, 0, sizeof(double) * fftLength);
+	memset(hTime, 0, sizeof(double) * fftLength);
+	memcpy(xTime, input.data(), sizeof(double) * input.size());
+	memcpy(hTime, impulse.data(), sizeof(double) * impulse.size());
+
+	fftw_plan xPlan = fftw_plan_dft_r2c_1d(fftLength, xTime, xFreq, FFTW_ESTIMATE);
+	fftw_plan hPlan = fftw_plan_dft_r2c_1d(fftLength, hTime, hFreq, FFTW_ESTIMATE);
+	fftw_execute(xPlan);
+	fftw_execute(hPlan);
+
+	for (int i = 0; i < fftLength / 2 + 1; i++)
+	{
+		const double real = xFreq[i][0] * hFreq[i][0] - xFreq[i][1] * hFreq[i][1];
+		const double imag = xFreq[i][0] * hFreq[i][1] + xFreq[i][1] * hFreq[i][0];
+		xFreq[i][0] = real;
+		xFreq[i][1] = imag;
+	}
+
+	fftw_plan yPlan = fftw_plan_dft_c2r_1d(fftLength, xFreq, xTime, FFTW_ESTIMATE);
+	fftw_execute(yPlan);
+
+	output.resize(input.size());
+	for (size_t i = 0; i < output.size(); i++)
+		output[i] = xTime[i] / fftLength;
+
+	fftw_destroy_plan(yPlan);
+	fftw_destroy_plan(hPlan);
+	fftw_destroy_plan(xPlan);
+	fftw_free(hFreq);
+	fftw_free(xFreq);
+	fftw_free(hTime);
+	fftw_free(xTime);
+}
+
+static double deterministicNoise(unsigned& state)
+{
+	state = state * 1664525u + 1013904223u;
+	return ((state >> 8) / 16777216.0) * 2.0 - 1.0;
+}
+
+static bool runConvolutionSelfTestCase(int sampleRate, int frameLength, int impulseLength, int blocks)
+{
+	const int inputLength = frameLength * blocks;
+	vector<double> input(inputLength);
+	vector<double> impulse(impulseLength);
+	vector<double> actual(inputLength);
+	vector<double> reference;
+	vector<double> block(frameLength);
+
+	unsigned state = 0x12345678u ^ (unsigned)sampleRate ^ (unsigned)frameLength;
+	for (int i = 0; i < inputLength; i++)
+	{
+		const double t = (double)i / sampleRate;
+		input[i] = 0.17 * sin(2.0 * M_PI * 997.0 * t)
+			+ 0.11 * sin(2.0 * M_PI * 1234.5 * t)
+			+ 0.03 * deterministicNoise(state);
+	}
+
+	for (int i = 0; i < impulseLength; i++)
+	{
+		const double decay = exp(-(double)i / (0.065 * sampleRate));
+		impulse[i] = decay * (0.012 * sin(0.013 * i) + 0.006 * deterministicNoise(state));
+	}
+
+	// Exercise boundaries across several filter partitions.
+	if (!impulse.empty())
+	{
+		impulse[0] += 0.55;
+		for (int p = frameLength - 1; p < impulseLength; p += frameLength)
+			impulse[p] += 0.04 * ((p / frameLength) % 2 == 0 ? 1.0 : -1.0);
+		for (int p = frameLength; p < impulseLength; p += frameLength)
+			impulse[p] += 0.035 * ((p / frameLength) % 2 == 0 ? -1.0 : 1.0);
+	}
+
+	referenceConvolutionFft(input, impulse, reference);
+
+	HConvSingle filter;
+	hcInitSingle(&filter, impulse.data(), impulseLength, frameLength, 1);
+	for (int b = 0; b < blocks; b++)
+	{
+		hcPutSingle(&filter, input.data() + (size_t)b * frameLength);
+		hcProcessSingle(&filter);
+		hcGetSingle(&filter, block.data());
+		memcpy(actual.data() + (size_t)b * frameLength, block.data(), sizeof(double) * frameLength);
+	}
+	hcCloseSingle(&filter);
+
+	double maxAbsError = 0.0;
+	double rmsError = 0.0;
+	double maxReference = 0.0;
+	int maxIndex = 0;
+	for (int i = 0; i < inputLength; i++)
+	{
+		const double error = fabs(actual[i] - reference[i]);
+		if (error > maxAbsError)
+		{
+			maxAbsError = error;
+			maxIndex = i;
+		}
+		rmsError += error * error;
+		maxReference = max(maxReference, fabs(reference[i]));
+	}
+	rmsError = sqrt(rmsError / inputLength);
+	const double relativeError = maxReference > 0.0 ? maxAbsError / maxReference : maxAbsError;
+	const bool passed = maxAbsError < 1e-8 || relativeError < 1e-8;
+
+	printf("%s sr=%d flen=%d hlen=%d blocks=%d max=%0.12g rel=%0.12g rms=%0.12g idx=%d\n",
+		passed ? "PASS" : "FAIL",
+		sampleRate, frameLength, impulseLength, blocks,
+		maxAbsError, relativeError, rmsError, maxIndex);
+
+	return passed;
+}
+
+static int runConvolutionSelfTest()
+{
+	struct TestCase
+	{
+		int sampleRate;
+		int frameLength;
+		int impulseLength;
+		int blocks;
+	};
+
+	const TestCase tests[] =
+	{
+		{ 44100, 256, 8192, 80 },
+		{ 48000, 256, 8916, 80 },
+		{ 96000, 512, 17832, 64 },
+		{ 192000, 1024, 35664, 48 },
+		{ 192000, 256, 35664, 80 },
+	};
+
+	bool ok = true;
+	printf("Running internal HybridConv correctness benchmark...\n");
+	for (const TestCase& test : tests)
+		ok = runConvolutionSelfTestCase(test.sampleRate, test.frameLength, test.impulseLength, test.blocks) && ok;
+
+	printf("HybridConv correctness benchmark: %s\n", ok ? "PASS" : "FAIL");
+	return ok ? 0 : 2;
+}
 
 int main(int argc, char** argv)
 {
@@ -50,6 +214,7 @@ int main(int argc, char** argv)
 			"It then filters the waveform using the Equalizer APO filter configuration "
 			"and finally writes to the given file or into the user's temp directory.", ' ', versionStream.str());
 
+		TCLAP::SwitchArg convSelfTestArg("", "convselftest", "Run internal HybridConv correctness benchmark and exit", cmd);
 		TCLAP::SwitchArg noPauseArg("", "nopause", "Do not wait for key press at the end", cmd);
 		TCLAP::SwitchArg verboseArg("v", "verbose", "Print trace and error messages to console instead of logfile", cmd);
 		TCLAP::ValueArg<string> guidArg("", "guid", "Endpoint GUID to use when parsing configuration (Default: <empty>)", false, "", "string", cmd);
@@ -72,6 +237,9 @@ int main(int argc, char** argv)
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 		// _CrtSetBreakAlloc(3318);
 #endif
+
+		if (convSelfTestArg.getValue())
+			return runConvolutionSelfTest();
 
 		unsigned sampleRate;
 		unsigned channelCount;
@@ -96,7 +264,7 @@ int main(int argc, char** argv)
 			PrecisionTimer timer;
 			timer.start();
 
-			SF_INFO info;
+			SF_INFO info = {};
 			SNDFILE* inFile = sf_open(input.c_str(), SFM_READ, &info);
 			if (inFile == NULL)
 			{
