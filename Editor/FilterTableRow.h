@@ -48,6 +48,8 @@ private slots:
 	void updateModel();
 
 	void on_actionAdd_triggered();
+	void on_actionCloneAbove_triggered();
+	void on_actionCloneBelow_triggered();
 	void on_actionRemove_triggered();
 	void on_actionEditText_triggered(bool checked);
 

@@ -56,6 +56,8 @@ vector<wstring> ConvolutionFilter::initialize(float sampleRate, unsigned maxFram
 	channelCount = (unsigned)channelNames.size();
 
 	initializeFilters(maxFrameCount);
+	if (filters != NULL)
+		filterFrameCount = maxFrameCount;
 
 	return channelNames;
 }
@@ -68,12 +70,10 @@ void ConvolutionFilter::process(double** output, double** input, unsigned frameC
 
 	if (frameCount != filterFrameCount)
 	{
-		LogF(L"Reinitializing convolution filter for audio block size change: %u -> %u frames",
-			filterFrameCount, frameCount);
-		cleanup();
-		initializeFilters(frameCount);
-		if (filters == NULL)
-			return;
+		for (unsigned i = 0; i < channelCount; i++)
+			if (output[i] != input[i])
+				memcpy(output[i], input[i], frameCount * sizeof(double));
+		return;
 	}
 
 	for (unsigned i = 0; i < channelCount; i++)

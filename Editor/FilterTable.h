@@ -64,6 +64,7 @@ public:
 	QList<QString> getLines();
 	void setLines(const QString& configPath, const QList<QString>& lines);
 	Item* addLine(const QString& line, Item* before = NULL);
+	Item* cloneItem(Item* item, bool insertBelow);
 	void removeItem(Item* item);
 	QMenu* createAddPopupMenu();
 	void cut();

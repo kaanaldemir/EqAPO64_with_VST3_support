@@ -17,6 +17,7 @@
 	51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include <algorithm>
 #include <vector>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -34,7 +35,7 @@
 #include "GraphicEQFilterGUI.h"
 #include "ui_GraphicEQFilterGUI.h"
 
-static const double DEFAULT_TABLE_WIDTH = 119;
+static const double DEFAULT_TABLE_WIDTH = 150;
 static const double DEFAULT_VIEW_HEIGHT = 150;
 
 using namespace std;
@@ -132,7 +133,7 @@ void GraphicEQFilterGUI::store(QString& command, QString& parameters)
 
 void GraphicEQFilterGUI::loadPreferences(const QVariantMap& prefs)
 {
-	ui->tableWidget->setFixedWidth(GUIHelper::scale(prefs.value("tableWidth", DEFAULT_TABLE_WIDTH).toDouble()));
+	ui->tableWidget->setFixedWidth(GUIHelper::scale(max(DEFAULT_TABLE_WIDTH, prefs.value("tableWidth", DEFAULT_TABLE_WIDTH).toDouble())));
 	ui->graphicsView->setFixedHeight(GUIHelper::scale(prefs.value("viewHeight", DEFAULT_VIEW_HEIGHT).toDouble()));
 	double zoomX = GUIHelper::scaleZoom(prefs.value("zoomX", 1.0).toDouble());
 	double zoomY = GUIHelper::scaleZoom(prefs.value("zoomY", 1.0).toDouble());

@@ -29,6 +29,18 @@
 #include <math.h>
 
 LoudnessCorrectionFilter::LoudnessCorrectionFilter(const FilterParameters& fParameters)
+	: _parameterUpdateThreadHandle(NULL),
+	  _stopParameterUpdateThreadEvent(NULL),
+	  _parameterchangedEvent(NULL),
+	  _channelCount(0),
+	  _sampleRate(48000.0f),
+	  _attFactor(1.0),
+	  _pendingAttFactor(1.0),
+	  _neutral(true),
+	  _neutralUpDate(true),
+	  _tempResult(0.0),
+	  _a0LS(1.0),
+	  _a0HS(1.0)
 {
 	_parameters = fParameters;
 	if (_parameters.attenuation > 1.0)
@@ -45,14 +57,16 @@ LoudnessCorrectionFilter::LoudnessCorrectionFilter(const FilterParameters& fPara
 LoudnessCorrectionFilter::~LoudnessCorrectionFilter()
 {
 	if (_stopParameterUpdateThreadEvent)
-	{
 		SetEvent(_stopParameterUpdateThreadEvent);
-	}
-	WaitForSingleObject(_parameterUpdateThreadHandle, INFINITE);
+	if (_parameterUpdateThreadHandle)
+		WaitForSingleObject(_parameterUpdateThreadHandle, INFINITE);
 	DeleteCriticalSection(&_parameterUpdateSection);
-	CloseHandle(_stopParameterUpdateThreadEvent);
-	CloseHandle(_parameterUpdateThreadHandle);
-	CloseHandle(_parameterchangedEvent);
+	if (_stopParameterUpdateThreadEvent)
+		CloseHandle(_stopParameterUpdateThreadEvent);
+	if (_parameterUpdateThreadHandle)
+		CloseHandle(_parameterUpdateThreadHandle);
+	if (_parameterchangedEvent)
+		CloseHandle(_parameterchangedEvent);
 }
 
 std::vector<std::wstring> LoudnessCorrectionFilter::initialize(float sampleRate, unsigned maxFrameCount, std::vector<std::wstring> channelNames)
@@ -62,6 +76,7 @@ std::vector<std::wstring> LoudnessCorrectionFilter::initialize(float sampleRate,
 	_highShelfBiquads.resize(_channelCount);
 	_sampleRate = sampleRate;
 	_attFactor = 1.0;
+	_pendingAttFactor = 1.0;
 	_neutral = true;
 
 	double freqLS = 75, qLS = 1, gainLS = 0;
@@ -149,13 +164,16 @@ unsigned long __stdcall LoudnessCorrectionFilter::parameterUpdateThread(void* pa
 				if (vol != volOld)
 				{
 					lCorrection->getLShelfParamter(vol, freqLS, qLS, gainLS, preAmp);
-					lCorrection->_attFactor = exp(preAmp / 6 * log(2));
+					const double pendingAttFactor = exp(preAmp / 6 * log(2));
 					lCorrection->getHShelfParamter(vol + (double)preAmp, freqHS, qHS, gainHS);
+					EnterCriticalSection(&lCorrection->_parameterUpdateSection);
+					lCorrection->_pendingAttFactor = pendingAttFactor;
 					lCorrection->upDateBiquadCoefficients(freqHS, qHS, gainHS, true);
 					lCorrection->upDateBiquadCoefficients(freqLS, qLS, gainLS, false);
 					volOld = vol;
 
 					lCorrection->_neutralUpDate = std::max<double>(std::abs(gainLS), std::abs(gainHS)) < 0.2 ? true : false;
+					LeaveCriticalSection(&lCorrection->_parameterUpdateSection);
 
 					SetEvent(lCorrection->_parameterchangedEvent);
 				}
@@ -187,15 +205,18 @@ void LoudnessCorrectionFilter::process(double** output, double** input, unsigned
 		output = input;
 		return;
 	}
-	if (WaitForSingleObject(_parameterchangedEvent, 0) == WAIT_OBJECT_0)
+	if (WaitForSingleObject(_parameterchangedEvent, 0) == WAIT_OBJECT_0
+		&& TryEnterCriticalSection(&_parameterUpdateSection))
 	{
 		for (unsigned i = 0; i < _channelCount; i++)
 		{
 			_lowShelfBiquads[i].setCoefficients(_aLS, _a0LS);
 			_highShelfBiquads[i].setCoefficients(_aHS, _a0HS);
 		}
+		_attFactor = _pendingAttFactor;
 		_neutral = upDateNeutral();
 		ResetEvent(_parameterchangedEvent);
+		LeaveCriticalSection(&_parameterUpdateSection);
 	}
 	for (unsigned i = 0; i < _channelCount; i++)
 	{
@@ -233,7 +254,6 @@ void LoudnessCorrectionFilter::upDateBiquadCoefficients(const double& freq, cons
 	beta = 2 * sqrt(A) * alpha;
 
 	double a0;
-	TryEnterCriticalSection(&_parameterUpdateSection);
 	if (highshelf)
 	{
 		a0 = (A + 1) - (A - 1) * cs + beta;
@@ -254,6 +274,5 @@ void LoudnessCorrectionFilter::upDateBiquadCoefficients(const double& freq, cons
 		_aLS[2] = (double)((-2 * ((A - 1) + (A + 1) * cs)) / a0);
 		_aLS[3] = (double)(((A + 1) + (A - 1) * cs - beta) / a0);
 	}
-	LeaveCriticalSection(&_parameterUpdateSection);
 }
 #pragma AVRT_CODE_END

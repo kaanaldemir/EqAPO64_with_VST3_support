@@ -96,6 +96,7 @@ private:
 	size_t _channelCount;
 	float _sampleRate;
 	double _attFactor;
+	double _pendingAttFactor;
 	std::vector<BiQuad> _lowShelfBiquads;
 	std::vector<BiQuad> _highShelfBiquads;
 

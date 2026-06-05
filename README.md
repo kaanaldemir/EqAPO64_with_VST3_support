@@ -50,6 +50,47 @@ PluginName.vst3/Contents/x86_64-win/PluginName.vst3
 
 If a plug-in does not show its editor, does not animate, process the audio with artifacts or crashes when opened or removed, test it first in a standard VST3 host or DAW. Some plug-ins require host features that Equalizer APO does not provide.
 
+## Stability And Workflow Update - June 5, 2026 (Exp Branch)
+
+The June 5, 2026 update stabilizes the experimental out-of-process VST path and
+polishes the Configuration Editor workflow around the new audio tools.
+
+### Out-of-process VST Hosting
+
+- Launches the out-of-process VST GUI host detached from `Editor.exe`, so
+  closing the Configuration Editor no longer owns or terminates the matching
+  `EqApoOutProcHost.exe` process.
+- Closing the Configuration Editor no longer treats every filter row as a
+  removed module. `OutProcVSTPlugin:` hosts are only terminated when the row is
+  actually removed, the plug-in is changed, or the reload action is used.
+- Keeps show/hide panel behavior separate from plug-in lifetime: hiding or
+  closing the panel does not unload the plug-in, while removing the row still
+  shuts down the matching host.
+- Adds a reload action for VST rows so a plug-in can be explicitly restarted
+  without manually deleting and recreating the filter.
+- Preserves the conservative VST state synchronization model for editor,
+  analyzer and audio-engine instances.
+
+### Configuration Editor
+
+- Adds clone-above and clone-below actions for filter rows.
+- Improves filter-row spacing so add, clone, remove and edit controls remain
+  visible in dense configurations.
+- Fixes context-menu placement and submenu parenting issues that could cause
+  menus to drift, resize inconsistently or appear away from the cursor.
+- Keeps GraphicEQ controls easier to reach by widening the numeric table area
+  and preventing old narrow preferences from collapsing it.
+- Improves Qt runtime discovery when launching the editor from different working
+  directories.
+
+### Installer And Packaging
+
+- Stages the detached `EqApoOutProcHost.exe` with the main x64 binaries.
+- Ensures required Qt image/style/platform plug-ins are copied into the
+  installer payload.
+- Removes stale experimental JUCE host files during install/upgrade if they are
+  present from previous local builds.
+
 ## Audio Tools And Convolution Update - June 3, 2026 (Exp Branch)
 
 The June 3, 2026 update extends the experimental branch with native audio

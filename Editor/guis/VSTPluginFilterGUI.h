@@ -26,8 +26,6 @@
 #include "Editor/IFilterGUI.h"
 #include "helpers/VSTPluginLibrary.h"
 
-class QProcess;
-
 namespace Ui {
 class VSTPluginFilterGUI;
 }
@@ -49,6 +47,7 @@ public:
 
 private slots:
 	void on_openPanelButton_clicked();
+	void on_reloadButton_clicked();
 	void applyDialog();
 	void autoApplyToggled(bool checked);
 	void on_pathLineEdit_editingFinished();
@@ -58,7 +57,6 @@ private slots:
 private:
 	void initPlugin();
 	void openOutProcPanel();
-	void finishOutProcPanel(int exitCode);
 	bool signalOutProcPanel(const wchar_t* suffix);
 	bool consumeOutProcPanelSignal(const wchar_t* suffix);
 	void closeOutProcPanel();
@@ -74,7 +72,8 @@ private:
 	std::unordered_map<std::wstring, float> paramMap;
 	bool outProcMode = false;
 	QString hostId;
-	QProcess* outProcGuiProcess = nullptr;
+	bool outProcGuiRunning = false;
+	qint64 outProcGuiPid = 0;
 	QString outProcGuiConfigPath;
 	bool outProcGuiHidden = false;
 	bool autoApplyDialog = false;

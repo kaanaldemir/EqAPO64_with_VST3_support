@@ -53,6 +53,8 @@ FilterTableRow::FilterTableRow(FilterTable* table, int number, FilterTable::Item
 	ui->labelNumber->setText(QString("%0").arg(number));
 
 	ui->toolBar->addAction(ui->actionAdd);
+	ui->toolBar->addAction(ui->actionCloneAbove);
+	ui->toolBar->addAction(ui->actionCloneBelow);
 	ui->toolBar->addAction(ui->actionRemove);
 	ui->toolBar->addAction(ui->actionEditText);
 	ui->toolBar->updateMaximumHeight();
@@ -173,13 +175,24 @@ void FilterTableRow::on_actionAdd_triggered()
 		table->addLine(line, item);
 		table->updateGuis();
 	}
+	delete menu;
+}
+
+void FilterTableRow::on_actionCloneAbove_triggered()
+{
+	table->cloneItem(item, false);
+	table->updateGuis();
+}
+
+void FilterTableRow::on_actionCloneBelow_triggered()
+{
+	table->cloneItem(item, true);
+	table->updateGuis();
 }
 
 void FilterTableRow::on_actionRemove_triggered()
 {
 	appendFilterRowDebugLog("remove clicked itemText=" + item->text + " gui=" + QString(gui != NULL ? "true" : "false"));
-	if (gui != NULL)
-		gui->prepareDelete();
 	table->removeItem(item);
 	table->updateGuis();
 }

@@ -199,12 +199,16 @@ void FilterEngine::resizeBuffers(unsigned frameCount) {
 
 			// Resize 2D buffers (for non-interleaved audio)
 			inputBuf2D.resize(inputChannelCount);
+			inputBuf2DPtrs.resize(inputChannelCount);
 			for (unsigned i = 0; i < inputChannelCount; ++i) {
 				inputBuf2D[i] = make_unique<double[]>(frameCount);
+				inputBuf2DPtrs[i] = inputBuf2D[i].get();
 			}
 			outputBuf2D.resize(outputChannelCount);
+			outputBuf2DPtrs.resize(outputChannelCount);
 			for (unsigned i = 0; i < outputChannelCount; ++i) {
 				outputBuf2D[i] = make_unique<double[]>(frameCount);
+				outputBuf2DPtrs[i] = outputBuf2D[i].get();
 			}
 		}
 		catch (const std::bad_alloc& e) {
@@ -544,14 +548,17 @@ void convertDoubleToFloat(float* dest, const double* src, size_t count) {
 // Process interleaved audio (float*)
 void FilterEngine::process(float* output, float* input, unsigned frameCount)
 {
-	if (currentConfig->isEmpty() && nextConfig == NULL)
+	if (frameCount > maxFrameCount || frameCount > allocatedFrameCount)
 	{
 		bypassInterleaved(output, input, inputChannelCount, outputChannelCount, frameCount);
 		return;
 	}
 
-	// Ensure our internal buffers are large enough
-	resizeBuffers(frameCount);
+	if (currentConfig->isEmpty() && nextConfig == NULL)
+	{
+		bypassInterleaved(output, input, inputChannelCount, outputChannelCount, frameCount);
+		return;
+	}
 
 	// Conversion from float to double using SIMD
 	const unsigned inputSampleCount = inputChannelCount * frameCount;
@@ -587,19 +594,17 @@ void FilterEngine::process(float* output, float* input, unsigned frameCount)
 // Process non-interleaved audio (float**)
 void FilterEngine::process(float** output, float** input, unsigned frameCount)
 {
-	if (currentConfig->isEmpty() && nextConfig == NULL)
+	if (frameCount > maxFrameCount || frameCount > allocatedFrameCount)
 	{
 		bypassPlanar(output, input, inputChannelCount, outputChannelCount, frameCount);
 		return;
 	}
 
-	resizeBuffers(frameCount);
-
-	// Create temporary raw pointer arrays for the FilterConfiguration interface
-	vector<double*> tempInputPtrs(inputChannelCount);
-	vector<double*> tempOutputPtrs(outputChannelCount);
-	for (unsigned i = 0; i < inputChannelCount; ++i) tempInputPtrs[i] = inputBuf2D[i].get();
-	for (unsigned i = 0; i < outputChannelCount; ++i) tempOutputPtrs[i] = outputBuf2D[i].get();
+	if (currentConfig->isEmpty() && nextConfig == NULL)
+	{
+		bypassPlanar(output, input, inputChannelCount, outputChannelCount, frameCount);
+		return;
+	}
 
 	// Optimized conversion for each channel
 	for (unsigned c = 0; c < inputChannelCount; c++) {
@@ -607,17 +612,17 @@ void FilterEngine::process(float** output, float** input, unsigned frameCount)
 	}
 
 	// Core processing logic is the same
-	currentConfig->read(tempInputPtrs.data(), frameCount);
+	currentConfig->read(inputBuf2DPtrs.data(), frameCount);
 	currentConfig->process(frameCount);
 
 	if (nextConfig != NULL)
 	{
-		nextConfig->read(tempInputPtrs.data(), frameCount);
+		nextConfig->read(inputBuf2DPtrs.data(), frameCount);
 		nextConfig->process(frameCount);
 		transitionCounter = currentConfig->doTransition(nextConfig, frameCount, transitionCounter, transitionLength);
 	}
 
-	currentConfig->write(tempOutputPtrs.data(), frameCount);
+	currentConfig->write(outputBuf2DPtrs.data(), frameCount);
 
 	// Optimized conversion back for each channel
 	for (unsigned c = 0; c < outputChannelCount; c++) {
@@ -638,6 +643,12 @@ void FilterEngine::process(float** output, float** input, unsigned frameCount)
 // Process interleaved audio (double*) - native double precision without conversion
 void FilterEngine::process(double* output, double* input, unsigned frameCount)
 {
+	if (frameCount > maxFrameCount)
+	{
+		bypassInterleaved(output, input, inputChannelCount, outputChannelCount, frameCount);
+		return;
+	}
+
 	if (currentConfig->isEmpty() && nextConfig == NULL)
 	{
 		bypassInterleaved(output, input, inputChannelCount, outputChannelCount, frameCount);
@@ -670,6 +681,12 @@ void FilterEngine::process(double* output, double* input, unsigned frameCount)
 // Process non-interleaved audio (double**) - native double precision without conversion
 void FilterEngine::process(double** output, double** input, unsigned frameCount)
 {
+	if (frameCount > maxFrameCount)
+	{
+		bypassPlanar(output, input, inputChannelCount, outputChannelCount, frameCount);
+		return;
+	}
+
 	if (currentConfig->isEmpty() && nextConfig == NULL)
 	{
 		bypassPlanar(output, input, inputChannelCount, outputChannelCount, frameCount);

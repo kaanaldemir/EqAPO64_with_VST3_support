@@ -21,6 +21,7 @@
 #include <QMimeData>
 #include <QApplication>
 #include <QClipboard>
+#include <QCursor>
 #include <QLabel>
 #include <QElapsedTimer>
 #include <QLineEdit>
@@ -31,7 +32,9 @@
 #include <QAbstractSpinBox>
 #include <QDial>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QSettings>
+#include <QUuid>
 
 #include "MainWindow.h"
 #include "FilterTableRow.h"
@@ -95,8 +98,6 @@ FilterTable::FilterTable(MainWindow* mainWindow, QWidget* parent)
 
 FilterTable::~FilterTable()
 {
-	for (Item* item : items)
-		prepareDeleteItem(item);
 	for (IFilterGUIFactory* factory : factories)
 		delete factory;
 	factories.clear();
@@ -349,6 +350,43 @@ FilterTable::Item* FilterTable::addLine(const QString& line, FilterTable::Item* 
 	return newItem;
 }
 
+FilterTable::Item* FilterTable::cloneItem(FilterTable::Item* item, bool insertBelow)
+{
+	const int sourceIndex = items.indexOf(item);
+	if (sourceIndex < 0)
+		return NULL;
+
+	if (item->gui != NULL)
+	{
+		item->prefs.clear();
+		item->gui->storePreferences(item->prefs);
+	}
+
+	QString clonedText = item->text;
+	const QRegularExpression outProcCommand("^\\s*(?:#\\s*)?OutProcVSTPlugin\\s*:");
+	if (outProcCommand.match(clonedText).hasMatch())
+	{
+		const QString replacement = " HostId " + QUuid::createUuid().toString(QUuid::WithoutBraces);
+		const QRegularExpression hostId("\\s+HostId\\s+(?:\"[^\"]*\"|\\S+)");
+		if (hostId.match(clonedText).hasMatch())
+			clonedText.replace(hostId, replacement);
+		else
+			clonedText += replacement;
+	}
+
+	Item* clone = new Item(clonedText);
+	clone->prefs = item->prefs;
+	items.insert(sourceIndex + (insertBelow ? 1 : 0), clone);
+
+	selected.clear();
+	selected.insert(clone);
+	focused = clone;
+	selectionStart = clone;
+
+	emit linesChanged();
+	return clone;
+}
+
 void FilterTable::removeItem(FilterTable::Item* item)
 {
 	items.removeOne(item);
@@ -366,7 +404,7 @@ void FilterTable::prepareDeleteItem(FilterTable::Item* item)
 QMenu* FilterTable::createAddPopupMenu()
 {
 	QHash<QList<QString>, QMenu*> pathMap;
-	QMenu* rootMenu = new QMenu;
+	QMenu* rootMenu = new QMenu(this);
 	pathMap[QStringList()] = rootMenu;
 
 	for (IFilterGUIFactory* f : factories)
@@ -385,7 +423,7 @@ QMenu* FilterTable::createAddPopupMenu()
 					menu = pathMap.value(currentPath);
 					if (menu == NULL)
 					{
-						menu = new QMenu(pathSegment);
+						menu = new QMenu(pathSegment, parentMenu);
 						pathMap.insert(currentPath, menu);
 						parentMenu->addMenu(menu);
 					}
@@ -528,10 +566,7 @@ void FilterTable::addActionTriggered()
 {
 	QMenu* menu = createAddPopupMenu();
 	QAction* addAction = qobject_cast<QAction*>(QObject::sender());
-	QToolBar* toolBar = qobject_cast<QToolBar*>(addAction->parentWidget());
-	QRect rect = toolBar->actionGeometry(addAction);
-	QPoint p = toolBar->mapToGlobal(QPoint(rect.x(), rect.y() + rect.height()));
-	QAction* action = menu->exec(p);
+	QAction* action = menu->exec(QCursor::pos());
 	addAction->setChecked(false);
 	if (action != NULL)
 	{
@@ -540,6 +575,7 @@ void FilterTable::addActionTriggered()
 		addLine(line);
 		updateGuis();
 	}
+	delete menu;
 }
 
 void FilterTable::openConfig(QString path)

@@ -137,10 +137,20 @@ foreach ($dll in $qtDlls) {
 	Copy-Item -LiteralPath $src -Destination (Join-Path $libDir $dll) -Force
 }
 
+$optionalQtDlls = @("dxcompiler.dll", "dxil.dll")
+foreach ($dll in $optionalQtDlls) {
+	$src = Join-Path $deployDir $dll
+	if (Test-Path -LiteralPath $src) {
+		Copy-Item -LiteralPath $src -Destination (Join-Path $libDir $dll) -Force
+	}
+}
+
 $pluginFiles = @(
 	"generic\qtuiotouchplugin.dll",
 	"iconengines\qsvgicon.dll",
+	"imageformats\qgif.dll",
 	"imageformats\qico.dll",
+	"imageformats\qjpeg.dll",
 	"imageformats\qsvg.dll",
 	"networkinformation\qnetworklistmanager.dll",
 	"platforms\qwindows.dll",

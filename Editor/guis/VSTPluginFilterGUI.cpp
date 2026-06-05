@@ -183,9 +183,31 @@ void VSTPluginFilterGUI::on_openPanelButton_clicked()
 	}
 }
 
+void VSTPluginFilterGUI::on_reloadButton_clicked()
+{
+	if (library->getLibPath().empty())
+		return;
+
+	if (outProcMode)
+	{
+		appendOutProcDebugLog("reload requested hostId=" + hostId);
+		terminateOutProcPanel();
+		hostId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+		ui->openPanelButton->setText(tr("Open panel"));
+		ui->statusLabel->setText(tr("Out-of-process VST host reloading"));
+	}
+	else
+	{
+		ui->statusLabel->setText(tr("VST plugin reloading"));
+	}
+
+	// Rewriting the row makes the APO audio engine reconstruct its VST instance.
+	emit updateModel();
+}
+
 void VSTPluginFilterGUI::openOutProcPanel()
 {
-	if (outProcGuiProcess != nullptr)
+	if (outProcGuiRunning)
 	{
 		if (outProcGuiHidden)
 		{
@@ -199,6 +221,16 @@ void VSTPluginFilterGUI::openOutProcPanel()
 			outProcGuiHidden = true;
 			ui->openPanelButton->setText(tr("Show panel"));
 		}
+		return;
+	}
+
+	if (signalOutProcPanel(L"GuiShow"))
+	{
+		outProcGuiRunning = true;
+		outProcGuiHidden = false;
+		ui->openPanelButton->setText(tr("Hide panel"));
+		ui->statusLabel->setText(tr("Out-of-process VST panel is open"));
+		idleTimer.start();
 		return;
 	}
 
@@ -229,54 +261,21 @@ void VSTPluginFilterGUI::openOutProcPanel()
 	arguments << "--gui" << "--session" << hostId << "--vst-config" << outProcGuiConfigPath;
 	appendOutProcDebugLog("open panel hostId=" + hostId + " config=" + outProcGuiConfigPath);
 
-	outProcGuiProcess = new QProcess(this);
-	outProcGuiProcess->setProgram(hostPath);
-	outProcGuiProcess->setArguments(arguments);
-	connect(outProcGuiProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
-		[this](int exitCode, QProcess::ExitStatus) {
-			finishOutProcPanel(exitCode);
-		});
-	connect(outProcGuiProcess, &QProcess::errorOccurred, this,
-		[this](QProcess::ProcessError error) {
-			if (error == QProcess::FailedToStart)
-			{
-				QMessageBox::warning(this, tr("VST plugin"), tr("Could not start the out-of-process VST host."));
-				finishOutProcPanel(-1);
-			}
-		});
+	qint64 pid = 0;
+	if (!QProcess::startDetached(hostPath, arguments, QCoreApplication::applicationDirPath(), &pid))
+	{
+		QMessageBox::warning(this, tr("VST plugin"), tr("Could not start the out-of-process VST host."));
+		QFile::remove(outProcGuiConfigPath);
+		outProcGuiConfigPath.clear();
+		return;
+	}
 
-	outProcGuiProcess->start();
+	outProcGuiRunning = true;
+	outProcGuiPid = pid;
 	outProcGuiHidden = false;
 	ui->openPanelButton->setText(tr("Hide panel"));
 	ui->statusLabel->setText(tr("Out-of-process VST panel is open"));
 	idleTimer.start();
-}
-
-void VSTPluginFilterGUI::finishOutProcPanel(int exitCode)
-{
-	if (exitCode == 0 && !outProcGuiConfigPath.isEmpty())
-	{
-		OutProcVSTConfig updatedConfig;
-		if (OutProcReadVSTConfig(outProcGuiConfigPath.toStdWString(), updatedConfig))
-		{
-			chunkData = updatedConfig.chunkData;
-			paramMap = updatedConfig.paramMap;
-			updateModel();
-		}
-	}
-
-	if (!outProcGuiConfigPath.isEmpty())
-		QFile::remove(outProcGuiConfigPath);
-	outProcGuiConfigPath.clear();
-
-	if (outProcGuiProcess != nullptr)
-	{
-		outProcGuiProcess->deleteLater();
-		outProcGuiProcess = nullptr;
-	}
-
-	ui->openPanelButton->setText(tr("Open panel"));
-	ui->statusLabel->setText(exitCode == 0 ? tr("Out-of-process VST host") : tr("Out-of-process VST panel closed unexpectedly"));
 }
 
 bool VSTPluginFilterGUI::signalOutProcPanel(const wchar_t* suffix)
@@ -393,46 +392,47 @@ static bool terminateOutProcPidFileForHostId(const QString& hostId)
 	return true;
 }
 
+static bool terminateOutProcPid(qint64 pid, const QString& hostId)
+{
+	if (pid <= 0 || static_cast<DWORD>(pid) == GetCurrentProcessId())
+		return false;
+
+	HANDLE process = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, FALSE, static_cast<DWORD>(pid));
+	if (process == NULL)
+	{
+		appendOutProcDebugLog("detached pid open process failed hostId=" + hostId + " pid=" + QString::number(pid) + " gle=" + QString::number(GetLastError()));
+		return false;
+	}
+
+	TerminateProcess(process, 0);
+	WaitForSingleObject(process, 1000);
+	CloseHandle(process);
+	appendOutProcDebugLog("detached pid terminated hostId=" + hostId + " pid=" + QString::number(pid));
+	return true;
+}
+
 void VSTPluginFilterGUI::closeOutProcPanel()
 {
-	if (outProcGuiProcess == nullptr)
+	if (!outProcGuiRunning)
 		return;
 
-	QProcess* process = outProcGuiProcess;
-	disconnect(process, nullptr, this, nullptr);
-	outProcGuiProcess = nullptr;
 	signalOutProcPanel(L"GuiHide");
-	process->setParent(nullptr);
-	connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), process, &QObject::deleteLater);
-
-	if (!outProcGuiConfigPath.isEmpty())
-		QFile::remove(outProcGuiConfigPath);
-	outProcGuiConfigPath.clear();
+	outProcGuiHidden = true;
 
 	if (ui != nullptr)
 	{
-		ui->openPanelButton->setText(tr("Open panel"));
+		ui->openPanelButton->setText(tr("Show panel"));
 		ui->statusLabel->setText(tr("Out-of-process VST host"));
 	}
 }
 
 void VSTPluginFilterGUI::terminateOutProcPanel()
 {
-	appendOutProcDebugLog("terminate panel hostId=" + hostId + " hasQProcess=" + QString(outProcGuiProcess != nullptr ? "true" : "false"));
+	appendOutProcDebugLog("terminate panel hostId=" + hostId + " running=" + QString(outProcGuiRunning ? "true" : "false") + " pid=" + QString::number(outProcGuiPid));
 	signalOutProcPanel(L"GuiExit");
 	terminateOutProcPidForHostId(hostId);
 	terminateOutProcPidFileForHostId(hostId);
-
-	if (outProcGuiProcess == nullptr)
-		return;
-
-	QProcess* process = outProcGuiProcess;
-	disconnect(process, nullptr, this, nullptr);
-	outProcGuiProcess = nullptr;
-	process->terminate();
-	if (!process->waitForFinished(750))
-		process->kill();
-	process->deleteLater();
+	terminateOutProcPid(outProcGuiPid, hostId);
 
 	if (!outProcGuiConfigPath.isEmpty())
 	{
@@ -445,6 +445,8 @@ void VSTPluginFilterGUI::terminateOutProcPanel()
 		QFile::remove(outProcGuiConfigPath);
 	}
 	outProcGuiConfigPath.clear();
+	outProcGuiRunning = false;
+	outProcGuiPid = 0;
 	outProcGuiHidden = false;
 }
 
@@ -617,13 +619,13 @@ void VSTPluginFilterGUI::on_selectButton_clicked()
 
 void VSTPluginFilterGUI::on_idle()
 {
-	if (outProcMode && outProcGuiProcess != nullptr && consumeOutProcPanelSignal(L"GuiHidden"))
+	if (outProcMode && outProcGuiRunning && consumeOutProcPanelSignal(L"GuiHidden"))
 	{
 		outProcGuiHidden = true;
 		ui->openPanelButton->setText(tr("Show panel"));
 	}
 
-	if (outProcMode && outProcGuiProcess != nullptr && !outProcGuiConfigPath.isEmpty())
+	if (outProcMode && outProcGuiRunning && !outProcGuiConfigPath.isEmpty())
 	{
 		if (!lastReadTimer.isValid() || lastReadTimer.elapsed() > 500)
 		{
