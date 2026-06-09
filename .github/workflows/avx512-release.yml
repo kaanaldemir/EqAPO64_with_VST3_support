@@ -1,0 +1,159 @@
+name: AVX512 upstream release
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Rebuild and replace the release for the current upstream commit"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: avx512-upstream-release
+  cancel-in-progress: false
+
+jobs:
+  sync-build-release:
+    runs-on: windows-2022
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge upstream
+        id: sync
+        shell: pwsh
+        run: |
+          git config --global core.longpaths true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/Mixomo/EqAPO64_with_VST3_support.git
+          git fetch upstream main
+
+          $upstreamSha = (git rev-parse upstream/main).Trim()
+          $shortSha = $upstreamSha.Substring(0, 12)
+          $changed = "false"
+
+          git merge-base --is-ancestor $upstreamSha HEAD
+          if ($LASTEXITCODE -ne 0) {
+            git merge --no-edit upstream/main
+            if ($LASTEXITCODE -ne 0) {
+              throw "Automatic upstream merge failed. Resolve the conflict in the fork and rerun the workflow."
+            }
+            git push origin HEAD:main
+            $changed = "true"
+          }
+
+          "upstream_sha=$upstreamSha" >> $env:GITHUB_OUTPUT
+          "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+          "changed=$changed" >> $env:GITHUB_OUTPUT
+
+      - name: Decide whether to build
+        id: decide
+        shell: pwsh
+        run: |
+          $tag = "avx512-${{ steps.sync.outputs.short_sha }}"
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          $force = "${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.force_release }}" -eq "true"
+          $shouldBuild = $force -or "${{ steps.sync.outputs.changed }}" -eq "true" -or -not $releaseExists
+
+          if ($force -and $releaseExists) {
+            gh release delete $tag --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes
+            $releaseExists = $false
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "should_build=$($shouldBuild.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Stop when no upstream release is needed
+        if: steps.decide.outputs.should_build != 'true'
+        shell: pwsh
+        run: |
+          Write-Host "No new upstream commit or missing AVX512 release was found."
+
+      - name: Embed AVX512 build metadata
+        if: steps.decide.outputs.should_build == 'true'
+        shell: pwsh
+        run: |
+          .\scripts\write-build-metadata.ps1 -Flavor avx512 -Commit "${{ steps.sync.outputs.upstream_sha }}"
+
+      - name: Build AVX512 installer
+        if: steps.decide.outputs.should_build == 'true'
+        shell: pwsh
+        run: |
+          .\scripts\build-installer-x64.ps1 -Configuration Release -VisualStudioEdition Enterprise -InstructionSet AdvancedVectorExtensions512 -InstallerSuffix "-AVX512"
+
+      - name: Create GitHub release
+        if: steps.decide.outputs.should_build == 'true'
+        id: release
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -LiteralPath .\Setup -Filter "EqualizerAPO-x64-AVX512-*.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if ($null -eq $installer) {
+            throw "AVX512 installer was not produced under Setup."
+          }
+
+          $versionLines = Get-Content .\version.h
+          $major = [regex]::Match(($versionLines -join "`n"), '#define MAJOR\s+(\d+)').Groups[1].Value
+          $minor = [regex]::Match(($versionLines -join "`n"), '#define MINOR\s+(\d+)').Groups[1].Value
+          $revision = [regex]::Match(($versionLines -join "`n"), '#define REVISION\s+(\d+)').Groups[1].Value
+          $baseVersion = if ($revision -eq "0") { "$major.$minor" } else { "$major.$minor.$revision" }
+          $releaseVersion = "$baseVersion-avx512.${{ steps.sync.outputs.short_sha }}"
+          $releaseUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/${{ steps.decide.outputs.tag }}"
+          $target = (git rev-parse HEAD).Trim()
+          $notes = @"
+          AVX-512 installer built from upstream Mixomo/EqAPO64_with_VST3_support commit ${{ steps.sync.outputs.upstream_sha }}.
+
+          This build is intended for CPUs with AVX-512 support.
+          "@
+
+          gh release create "${{ steps.decide.outputs.tag }}" $installer.FullName `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $target `
+            --title "Equalizer APO AVX512 $releaseVersion" `
+            --notes $notes
+
+          "release_version=$releaseVersion" >> $env:GITHUB_OUTPUT
+          "release_url=$releaseUrl" >> $env:GITHUB_OUTPUT
+
+      - name: Update AVX512 update-check metadata
+        if: steps.decide.outputs.should_build == 'true'
+        shell: pwsh
+        run: |
+          $metadata = [ordered]@{
+            "download-url" = "${{ steps.release.outputs.release_url }}"
+            "versions" = @(
+              [ordered]@{
+                "version" = "${{ steps.release.outputs.release_version }}"
+                "date" = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
+                "info" = @(
+                  "AVX-512 build compiled with MSVC /arch:AVX512.",
+                  "Built from upstream Mixomo/EqAPO64_with_VST3_support commit ${{ steps.sync.outputs.upstream_sha }}."
+                )
+              }
+            )
+          }
+
+          $json = $metadata | ConvertTo-Json -Depth 8
+          Set-Content -LiteralPath .\UpdateChecker\checkVersion-avx512.json -Value $json -Encoding ASCII
+
+          git checkout -- .\UpdateChecker\BuildMetadata.h
+          git add .\UpdateChecker\checkVersion-avx512.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Update AVX512 release metadata for ${{ steps.sync.outputs.short_sha }}"
+            git push origin HEAD:main
+          }

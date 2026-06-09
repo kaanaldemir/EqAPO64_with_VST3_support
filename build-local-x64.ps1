@@ -1,7 +1,9 @@
 param(
 	[string]$Configuration = "Release",
 	[string]$PlatformToolset = "v143",
-	[string]$VisualStudioEdition = "Community"
+	[string]$VisualStudioEdition = "Community",
+	[ValidateSet("AdvancedVectorExtensions2", "AdvancedVectorExtensions512")]
+	[string]$InstructionSet = "AdvancedVectorExtensions2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +48,7 @@ $props = @(
 	"/p:MUPARSERX_INCLUDE=$($paths.MUPARSERX_INCLUDE)",
 	"/p:MUPARSERX_LIB=$($paths.MUPARSERX_LIB)",
 	"/p:TCLAP_ROOT=$($paths.TCLAP_ROOT)",
+	"/p:EnableEnhancedInstructionSet=$InstructionSet",
 	"/m"
 )
 

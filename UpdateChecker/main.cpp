@@ -26,11 +26,15 @@
 #include <QtWidgets/QApplication>
 #include <helpers/TaskSchedulerHelper.h>
 #include "UpdateChecker.h"
+#include "BuildMetadata.h"
 #include "version.h"
 
 using namespace std::chrono_literals;
 
 void showFailureMessage(QString message, QString title);
+QString getInstalledVersion();
+QString getUpdateCheckUrl();
+QString getNewestVersion(const QJsonDocument& doc);
 
 int main(int argc, char* argv[])
 {
@@ -87,11 +91,9 @@ int main(int argc, char* argv[])
 	}
 	bool autoMode = parser.isSet(autoOption);
 
-	QString version = QString("%0.%1").arg(MAJOR).arg(MINOR);
-	if (REVISION != 0)
-		version += QString(".%0").arg(REVISION);
+	QString version = getInstalledVersion();
 
-	QString url = "https://equalizerapo.sourceforge.io/checkVersion?installed=" + QUrl::toPercentEncoding(version);
+	QString url = getUpdateCheckUrl();
 	if (autoMode)
 	{
 		QSettings settings(QString::fromWCharArray(UPDATE_CHECKER_REGPATH), QSettings::NativeFormat);
@@ -101,13 +103,6 @@ int main(int argc, char* argv[])
 			return 1;
 		settings.setValue("lastCheckDate", QDateTime::currentDateTime(QTimeZone::systemTimeZone()).toString(Qt::DateFormat::ISODate));
 
-		QString skipVersion = settings.value("skipVersion").toString();
-		if (!skipVersion.isEmpty())
-			url += "&skip=" + QUrl::toPercentEncoding(skipVersion);
-	}
-	else
-	{
-		url += "&manual=true";
 	}
 
 	QNetworkAccessManager manager;
@@ -156,15 +151,58 @@ int main(int argc, char* argv[])
 				}
 				else
 				{
-					UpdateChecker dialog(nullptr, doc);
-					dialog.show();
-					result = app.exec();
+					QString newestVersion = getNewestVersion(doc);
+					QSettings settings(QString::fromWCharArray(UPDATE_CHECKER_REGPATH), QSettings::NativeFormat);
+					QString skipVersion = settings.value("skipVersion").toString();
+					if (newestVersion.isEmpty() || newestVersion == version || (autoMode && newestVersion == skipVersion))
+					{
+						if (!autoMode)
+							QMessageBox::information(nullptr, UpdateChecker::tr("No update available"), UpdateChecker::tr("The installed version %0 of Equalizer APO is up to date.").arg(version));
+					}
+					else
+					{
+						UpdateChecker dialog(nullptr, doc);
+						dialog.show();
+						result = app.exec();
+					}
 				}
 			}
 		}
 	}
 
 	return result;
+}
+
+QString getInstalledVersion()
+{
+	QString version = QString("%0.%1").arg(MAJOR).arg(MINOR);
+	if (REVISION != 0)
+		version += QString(".%0").arg(REVISION);
+
+	QString flavor = QString::fromUtf8(EAPO_BUILD_FLAVOR).trimmed();
+	QString commit = QString::fromUtf8(EAPO_BUILD_COMMIT).trimmed();
+	if (!flavor.isEmpty())
+	{
+		version += "-" + flavor;
+		if (!commit.isEmpty())
+			version += "." + commit;
+	}
+
+	return version;
+}
+
+QString getUpdateCheckUrl()
+{
+	return "https://raw.githubusercontent.com/kaanaldemir/EqAPO64_with_VST3_support/main/UpdateChecker/checkVersion-avx512.json";
+}
+
+QString getNewestVersion(const QJsonDocument& doc)
+{
+	QJsonArray versionsArray = doc.object().value("versions").toArray();
+	if (versionsArray.isEmpty())
+		return QString();
+
+	return versionsArray.first().toObject().value("version").toString();
 }
 
 void showFailureMessage(QString message, QString title)

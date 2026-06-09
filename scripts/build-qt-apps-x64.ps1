@@ -1,7 +1,8 @@
 param(
 	[string]$Configuration = "Release",
 	[string]$VisualStudioEdition = "Community",
-	[string]$QtRoot = ""
+	[string]$QtRoot = "",
+	[string]$ArchFlag = "/arch:AVX2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,6 +74,7 @@ foreach ($app in $apps) {
 		"set `"FFTW_LIB=$($paths.FFTW_LIB)`"",
 		"set `"MUPARSERX_INCLUDE=$($paths.MUPARSERX_INCLUDE)`"",
 		"set `"MUPARSERX_LIB=$($paths.MUPARSERX_LIB)`"",
+		"set `"EAPO_ARCH_FLAG=$ArchFlag`"",
 		"cd /d `"$buildDir`"",
 		"`"$qmake`" `"$($app.Project)`" -spec win32-msvc CONFIG+=release CONFIG-=debug",
 		"nmake"

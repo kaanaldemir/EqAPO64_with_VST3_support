@@ -118,6 +118,23 @@ The script performs the complete packaging flow:
 - Stages runtime files under `Setup/lib64`.
 - Creates the final NSIS installer under `Setup/`.
 
+### AVX-512 Fork Builds
+
+This fork can build an AVX-512 x64 installer by passing the instruction-set override:
+
+```powershell
+.\scripts\build-installer-x64.ps1 -Configuration Release -InstructionSet AdvancedVectorExtensions512
+```
+
+The AVX-512 build emits an installer named like `EqualizerAPO-x64-AVX512-<version>.exe`.
+The bundled update checker is pointed at this fork's AVX-512 release metadata:
+`UpdateChecker/checkVersion-avx512.json`.
+
+The GitHub Actions workflow `.github/workflows/avx512-release.yml` checks upstream
+`Mixomo/EqAPO64_with_VST3_support`, merges new upstream commits into this fork, builds
+the AVX-512 installer, publishes a GitHub release, and updates the metadata consumed
+by the integrated update checker.
+
 ## License Summary
 
 - Equalizer APO is distributed under the GNU General Public License. This fork is

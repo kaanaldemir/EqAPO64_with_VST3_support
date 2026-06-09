@@ -54,6 +54,11 @@ LIBS += -lSecur32 -ltaskschd Kernel32.lib version.lib oleaut32.lib Shlwapi.lib u
 
 # Include Common.lib
 LIBS += Common.lib
+EAPO_ARCH_FLAG = $$(EAPO_ARCH_FLAG)
+isEmpty(EAPO_ARCH_FLAG) {
+	EAPO_ARCH_FLAG = /arch:AVX2
+}
+
 contains(QT_ARCH, arm64) {
 	build_pass:CONFIG(debug, debug|release) {
 		QMAKE_LIBDIR += "$$PWD/../ARM64/Debug"
@@ -62,7 +67,7 @@ contains(QT_ARCH, arm64) {
 		QMAKE_LIBDIR += "$$PWD/../ARM64/Release"
 	}
 } else:contains(QT_ARCH, x86_64) {
-	QMAKE_CXXFLAGS += /arch:AVX2
+	QMAKE_CXXFLAGS += $$EAPO_ARCH_FLAG
 	build_pass:CONFIG(debug, debug|release) {
 		QMAKE_LIBDIR += "$$PWD/../x64/Debug"
 
@@ -70,7 +75,7 @@ contains(QT_ARCH, arm64) {
 		QMAKE_LIBDIR += "$$PWD/../x64/Release"
 	}
 } else {
-	QMAKE_CXXFLAGS += /arch:AVX2
+	QMAKE_CXXFLAGS += $$EAPO_ARCH_FLAG
 	build_pass:CONFIG(debug, debug|release) {
 		QMAKE_LIBDIR += "$$PWD/../x32/Debug"
 

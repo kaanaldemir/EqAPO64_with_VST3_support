@@ -1,0 +1,12 @@
+{
+  "download-url": "https://github.com/kaanaldemir/EqAPO64_with_VST3_support/releases",
+  "versions": [
+    {
+      "version": "1.4.2-avx512.local",
+      "date": "2026-06-09",
+      "info": [
+        "AVX-512 release metadata is updated automatically by the fork release workflow."
+      ]
+    }
+  ]
+}

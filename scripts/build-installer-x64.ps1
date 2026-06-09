@@ -1,15 +1,23 @@
 param(
 	[string]$Configuration = "Release",
 	[string]$VisualStudioEdition = "Community",
-	[string]$Makensis = ""
+	[string]$Makensis = "",
+	[ValidateSet("AdvancedVectorExtensions2", "AdvancedVectorExtensions512")]
+	[string]$InstructionSet = "AdvancedVectorExtensions2",
+	[string]$InstallerSuffix = ""
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
 & (Join-Path $root "scripts\bootstrap-third-party.ps1") -Configuration $Configuration -WithQt -WithNsis
-& (Join-Path $root "build-local-x64.ps1") -Configuration $Configuration -VisualStudioEdition $VisualStudioEdition
-& (Join-Path $root "scripts\build-qt-apps-x64.ps1") -Configuration $Configuration -VisualStudioEdition $VisualStudioEdition
+$archFlag = if ($InstructionSet -eq "AdvancedVectorExtensions512") { "/arch:AVX512" } else { "/arch:AVX2" }
+if ($InstallerSuffix -eq "" -and $InstructionSet -eq "AdvancedVectorExtensions512") {
+	$InstallerSuffix = "-AVX512"
+}
+
+& (Join-Path $root "build-local-x64.ps1") -Configuration $Configuration -VisualStudioEdition $VisualStudioEdition -InstructionSet $InstructionSet
+& (Join-Path $root "scripts\build-qt-apps-x64.ps1") -Configuration $Configuration -VisualStudioEdition $VisualStudioEdition -ArchFlag $archFlag
 & (Join-Path $root "scripts\stage-installer-x64.ps1") -Configuration $Configuration
 
 if ($Makensis -eq "") {
@@ -43,7 +51,12 @@ if ($Makensis -eq "") {
 
 Push-Location (Join-Path $root "Setup")
 try {
-	& $Makensis ".\Setup64.nsi"
+	$makensisArgs = @()
+	if ($InstallerSuffix -ne "") {
+		$makensisArgs += "/DOUTFILE_SUFFIX=$InstallerSuffix"
+	}
+	$makensisArgs += ".\Setup64.nsi"
+	& $Makensis @makensisArgs
 	if ($LASTEXITCODE -ne 0) {
 		throw "makensis failed with exit code $LASTEXITCODE"
 	}
