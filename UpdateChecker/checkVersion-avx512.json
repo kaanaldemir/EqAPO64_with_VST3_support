@@ -1,11 +1,12 @@
 {
-  "download-url": "https://github.com/kaanaldemir/EqAPO64_with_VST3_support/releases",
+  "download-url": "https://github.com/kaanaldemir/EqAPO64_with_VST3_support/releases/tag/avx512-ec6ce6008142",
   "versions": [
     {
-      "version": "1.4.2-avx512.local",
+      "version": "1.4.2-avx512.ec6ce6008142",
       "date": "2026-06-09",
       "info": [
-        "AVX-512 release metadata is updated automatically by the fork release workflow."
+        "AVX-512 build compiled with MSVC /arch:AVX512.",
+        "Built from upstream Mixomo/EqAPO64_with_VST3_support commit ec6ce60081427f853aca49bd1d3d1c537fef6c93."
       ]
     }
   ]
