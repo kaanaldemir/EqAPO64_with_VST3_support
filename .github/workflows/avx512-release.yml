@@ -2,7 +2,7 @@ name: AVX512 upstream release
 
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "17 3 * * 0"
   workflow_dispatch:
     inputs:
       force_release:
@@ -69,7 +69,8 @@ jobs:
             $global:LASTEXITCODE = 0
           }
           $force = "${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.force_release }}" -eq "true"
-          $shouldBuild = $force -or "${{ steps.sync.outputs.changed }}" -eq "true" -or -not $releaseExists
+          $manualMissingRelease = "${{ github.event_name }}" -eq "workflow_dispatch" -and -not $releaseExists
+          $shouldBuild = $force -or "${{ steps.sync.outputs.changed }}" -eq "true" -or $manualMissingRelease
 
           if ($force -and $releaseExists) {
             gh release delete $tag --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes
