@@ -65,6 +65,9 @@ jobs:
           $tag = "avx512-${{ steps.sync.outputs.short_sha }}"
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           $releaseExists = $LASTEXITCODE -eq 0
+          if (-not $releaseExists) {
+            $global:LASTEXITCODE = 0
+          }
           $force = "${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.force_release }}" -eq "true"
           $shouldBuild = $force -or "${{ steps.sync.outputs.changed }}" -eq "true" -or -not $releaseExists
 
